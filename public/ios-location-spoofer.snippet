@@ -1,0 +1,10 @@
+#!name=iOS Location Spoofer (Stateless)
+#!desc=任何售卖本项目/模块的都是骗子，请立即联系退款。无状态版。Quantumult X 用「重写(rewrite)引用」(非模块/插件)。MITM 主机名需手动加进 QX 设置 → MITM。
+#!homepage=https://cyberhandyman-ioslocspo.cyberhandyman.workers.dev
+
+[rewrite_local]
+^https?:\/\/(?:gs-loc(?:-cn)?\.apple\.com|bluedot\.is\.autonavi\.com(?:\.gds\.alibabadns\.com)?)\/clls\/wloc(?:\?.*)?$ url script-response-body https://cyberhandyman-ioslocspo.cyberhandyman.workers.dev/location-spoofer-qx.js
+^https?:\/\/gs-loc(?:-cn)?\.apple\.com\/ils-settings\/ url script-echo-response https://cyberhandyman-ioslocspo.cyberhandyman.workers.dev/location-settings.js
+
+[mitm]
+hostname = gs-loc.apple.com, gs-loc-cn.apple.com, bluedot.is.autonavi.com, bluedot.is.autonavi.com.gds.alibabadns.com

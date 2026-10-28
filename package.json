@@ -1,0 +1,11 @@
+{
+  "name": "ios-location-personal-fork",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bash scripts/build.sh",
+    "validate": "node scripts/validate-artifact.mjs",
+    "test": "node tests/fork.test.mjs",
+    "preview": "node scripts/preview.mjs"
+  }
+}

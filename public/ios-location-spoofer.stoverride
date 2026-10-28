@@ -1,0 +1,30 @@
+name: iOS Location Spoofer (Stateless)
+desc: "任何售卖本项目/模块的都是骗子，请立即联系退款。iOS Location Spoofer 无状态版 (Stash)"
+homepage: https://cyberhandyman-ioslocspo.cyberhandyman.workers.dev
+
+http:
+  mitm:
+    - "gs-loc.apple.com"
+    - "gs-loc-cn.apple.com"
+  script:
+    - match: ^https?:\/\/gs-loc(-cn)?\.apple\.com\/clls\/wloc
+      name: ios-location-spoofer
+      type: response
+      require-body: true
+      binary-mode: true
+      max-size: 0
+      timeout: 30
+      argument: mode=response&debug=false
+    - match: ^https?:\/\/gs-loc(-cn)?\.apple\.com\/ils-settings\/
+      name: ios-location-settings
+      type: request
+      require-body: false
+      timeout: 10
+
+script-providers:
+  ios-location-spoofer:
+    url: https://cyberhandyman-ioslocspo.cyberhandyman.workers.dev/location-spoofer.js
+    interval: 86400
+  ios-location-settings:
+    url: https://cyberhandyman-ioslocspo.cyberhandyman.workers.dev/location-settings.js
+    interval: 86400
