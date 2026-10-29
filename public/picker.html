@@ -227,14 +227,14 @@ body {
     <div id="favList" class="fav-list"></div>
   </div>
   <div class="card">
-    <h3 data-i18n="active_title">Active coordinates</h3>
+    <h3 data-i18n="active_title">Device location status</h3>
     <div class="active-loc" id="activeLoc">
       <div class="label" data-i18n="active_label">On-device coordinates (latitude/longitude/altitude)</div>
       <div class="value" id="activeValue">Querying...</div>
     </div>
     <div class="row">
       <button class="btn btn-sm btn-secondary" data-i18n="refresh" onclick="queryActive()">Refresh</button>
-      <button class="btn btn-sm btn-danger" data-i18n="clear_data" onclick="clearActive()">Clear Data</button>
+      <button class="btn btn-sm btn-danger" data-i18n="clear_data" onclick="clearActive()">Disable location</button>
     </div>
   </div>
   <div class="card">
@@ -281,6 +281,8 @@ let elev = null, elevState = 'idle'; // idle | loading | ok | fail
 let elevSeq = 0, elevTimer = null;
 const elevCache = new Map();
 let activeLon = null, activeLat = null, activeAcc = null, activeAlt = null, activeStatus = 'querying';
+let deviceRequestSeq = 0; // Ignore queries that finish after a newer save/clear/query.
+let deviceMutationPending = false;
 let savedLon = null, savedLat = null, savedTimeStr = '';
 
 /* ---- i18n ---- */
@@ -302,24 +304,24 @@ const I18N = {
       '<code>扰动半径</code>（米），默认 <em>0</em>（关闭）—— 设为 <em>N</em> 后，每次定位在目标点周围 <em>N</em> 米内随机偏移，避免每次结果一模一样。想固定在精确坐标就留 <em>0</em>。' +
       '<span class="src">参数建议来自上游项目 mekos2772 / ios-location-spoofer</span>',
     fav_title: '收藏的位置', clear_all: '清空全部',
-    active_title: '当前生效坐标', active_label: '设备本地坐标 (latitude/longitude/altitude)',
-    refresh: '刷新', clear_data: '清除数据',
+    active_title: '设备定位状态', active_label: '设备本地坐标 (latitude/longitude/altitude)',
+    refresh: '刷新', clear_data: '停用定位',
     paste_title: '粘贴地图链接', paste_ph: 'Apple/Google/高德/百度地图链接 或 经纬度', parse: '解析',
     paste_hint: '支持 Apple Maps · Google Maps · 高德 · 百度 · 坐标文本（自动换算为 WGS-84）',
     search_title: '搜索地点', search_ph: '搜地名，回车列出候选（只预览，不改定位）', search: '搜索',
     status_hint: '选好位置后点击「储存到设备」写入代理工具',
     modal_title: '收藏此位置', modal_ph: '输入备注名称（如: 公司、家）', cancel: '取消', save_short: '保存',
-    acc: '精度', restore: '恢复真实定位', restored: '✓ 虚拟定位已清除，定位服务开关关闭后，关掉代理开关，等待至少 10 秒钟，再次开启生效', hacc: '水平精度', vacc: '垂直精度', jitter: '扰动半径(米)',
-    querying: '查询中...', no_saved: '无已保存的坐标', query_failed: '查询失败 (需要代理模块支持)', cleared: '已清除',
+    acc: '精度', restore: '恢复真实定位', restored: '✓ 虚拟定位已停用，坐标保留。定位服务开关关闭后，关掉代理开关，等待至少 10 秒钟，再次开启生效', hacc: '水平精度', vacc: '垂直精度', jitter: '扰动半径(米)',
+    querying: '查询中...', no_saved: '无已保存的坐标', query_failed: '查询失败，无法确认定位状态 (请检查代理模块)', disabled: '已保存但停用', enabled: '已启用定位',
     fav_empty: '暂无收藏，选好位置后点击「收藏位置」',
-    active_now: '✓ 当前生效', del: '删除',
+    active_now: '✓ 已启用', del: '删除',
     pick_first: '请先在地图上选择一个位置',
     enter_label: '请输入备注名称',
     added: function(n){ return '已收藏: ' + n; },
     deleted: function(n){ return '已删除: ' + n; },
     clear_fav_confirm: '确定清空所有收藏？', all_cleared: '已清空所有收藏',
-    clear_confirm: '确定清除设备上已保存的坐标？清除后将使用模块默认参数或停止修改定位。',
-    dev_cleared: '已清除设备坐标',
+    clear_confirm: '确定停用虚拟定位？已保存的坐标会保留，重新选择并储存可再次启用。',
+    dev_cleared: '虚拟定位已停用，已保存的坐标保留',
     clear_failed: function(e){ return '清除失败: ' + e; },
     clear_failed_cfg: '清除失败 - 请检查模块配置',
     saving: '储存中...', saved: '✓ 已储存',
@@ -353,24 +355,24 @@ const I18N = {
       '<code>Jitter radius</code> in metres, default <em>0</em> (off) — set to <em>N</em> and each positioning is randomly offset within <em>N</em> m of the target, so results are never identical. Leave <em>0</em> to stay pinned to the exact point.' +
       '<span class="src">Guidance from the upstream project mekos2772 / ios-location-spoofer</span>',
     fav_title: 'Favorites', clear_all: 'Clear All',
-    active_title: 'Active coordinates', active_label: 'On-device coordinates (latitude/longitude/altitude)',
-    refresh: 'Refresh', clear_data: 'Clear Data',
+    active_title: 'Device location status', active_label: 'On-device coordinates (latitude/longitude/altitude)',
+    refresh: 'Refresh', clear_data: 'Disable location',
     paste_title: 'Paste map link', paste_ph: 'Apple / Google / Amap / Baidu map link or coordinates', parse: 'Parse',
     paste_hint: 'Supports Apple Maps · Google Maps · Amap · Baidu · coordinate text (auto-converted to WGS-84)',
     search_title: 'Search place', search_ph: 'Search a place, Enter to list candidates (preview only)', search: 'Search',
     status_hint: 'Pick a location, then tap "Save to Device" to write it to your proxy tool',
     modal_title: 'Add this location to favorites', modal_ph: 'Enter a label (e.g. Office, Home)', cancel: 'Cancel', save_short: 'Save',
-    acc: 'Accuracy', restore: 'Restore real location', restored: '✓ Spoofed location cleared. Turn Location Services OFF, switch your proxy off, wait at least 10 seconds, then turn it back ON to take effect.', hacc: 'H. accuracy', vacc: 'V. accuracy', jitter: 'Jitter radius(m)',
-    querying: 'Querying...', no_saved: 'No saved coordinates', query_failed: 'Query failed (requires the proxy module)', cleared: 'Cleared',
+    acc: 'Accuracy', restore: 'Restore real location', restored: '✓ Location disabled; saved coordinates kept. Turn Location Services OFF, switch your proxy off, wait at least 10 seconds, then turn it back ON to take effect.', hacc: 'H. accuracy', vacc: 'V. accuracy', jitter: 'Jitter radius(m)',
+    querying: 'Querying...', no_saved: 'No saved coordinates', query_failed: 'Query failed; location status unknown (check the proxy module)', disabled: 'Saved but disabled', enabled: 'Location enabled',
     fav_empty: 'No favorites yet. Pick a location and tap "Add Favorite".',
-    active_now: '✓ Active now', del: 'Delete',
+    active_now: '✓ Enabled', del: 'Delete',
     pick_first: 'Please pick a location on the map first',
     enter_label: 'Please enter a label',
     added: function(n){ return 'Added: ' + n; },
     deleted: function(n){ return 'Deleted: ' + n; },
     clear_fav_confirm: 'Clear all favorites?', all_cleared: 'All favorites cleared',
-    clear_confirm: 'Clear the coordinates saved on the device? After clearing, the module default parameters will be used or location spoofing will stop.',
-    dev_cleared: 'Device coordinates cleared',
+    clear_confirm: 'Disable location spoofing? Saved coordinates will be kept. Select and save them again to enable.',
+    dev_cleared: 'Location disabled; saved coordinates kept',
     clear_failed: function(e){ return 'Clear failed: ' + e; },
     clear_failed_cfg: 'Clear failed - please check the module configuration',
     saving: 'Saving...', saved: '✓ Saved',
@@ -598,7 +600,7 @@ function renderFavs() {
     return;
   }
   el.innerHTML = favs.map((f, i) => {
-    const isActive = activeLon !== null && Math.abs(f.lon - activeLon) < 0.000001 && Math.abs(f.lat - activeLat) < 0.000001;
+    const isActive = activeStatus === 'ok' && activeLon !== null && activeLat !== null && Math.abs(f.lon - activeLon) < 0.000001 && Math.abs(f.lat - activeLat) < 0.000001;
     const altStr = (typeof f.alt === 'number') ? ('  ·  ' + f.alt + ' m') : '';
     return '<div class="fav-item" onclick="loadFav(' + i + ')">' +
       '<div class="fav-info">' +
@@ -668,95 +670,144 @@ function clearAllFav() {
 /* ---- Active location query ---- */
 function renderActive() {
   const el = document.getElementById('activeValue');
-  if (activeStatus === 'ok') {
-    el.textContent = t('lon') + ' ' + activeLon.toFixed(6) + '  ' + t('lat') + ' ' + activeLat.toFixed(6)
+  if (activeStatus === 'ok' || activeStatus === 'disabled') {
+    el.textContent = t(activeStatus === 'ok' ? 'enabled' : 'disabled') + ' · ' + t('lon') + ' ' + activeLon.toFixed(6) + '  ' + t('lat') + ' ' + activeLat.toFixed(6)
       + (activeAcc ? ('  ' + t('acc') + ' ' + activeAcc + 'm') : '')
       + (activeAlt !== null && activeAlt !== undefined ? ('  ' + t('alt') + ' ' + activeAlt + 'm') : '');
   } else if (activeStatus === 'none') {
     el.textContent = t('no_saved');
   } else if (activeStatus === 'failed') {
     el.textContent = t('query_failed');
-  } else if (activeStatus === 'cleared') {
-    el.textContent = t('cleared');
   } else {
     el.textContent = t('querying');
   }
 }
 
-function queryActive() {
-  activeStatus = 'querying';
-  renderActive();
-  fetch(SAVE_API + '?action=query', { method:'GET', mode:'cors', cache:'no-store' })
-    .then(r => r.json())
-    .then(d => {
-      if (d.success && d.longitude && d.latitude) {
-        activeLon = parseFloat(d.longitude);
-        activeLat = parseFloat(d.latitude);
-        activeAcc = (d.horizontalAccuracy != null ? d.horizontalAccuracy : (d.accuracy || null));
-        activeAlt = (d.altitude !== undefined && d.altitude !== null) ? d.altitude : null;
-        // Reflect the device's stored jitter radius back into the input (Yu9191 v1.1).
-        if (d.randomRadius != null) { const ji = document.getElementById('jitterInput'); if (ji) ji.value = d.randomRadius; }
-        activeStatus = 'ok';
-        if (!didInitialCenter && !selected) {
-          didInitialCenter = true;
-          moveTo(activeLat, activeLon, 15, (activeAlt !== null && activeAlt !== undefined) ? activeAlt : undefined);
-        }
-      } else {
-        activeLon = null; activeLat = null; activeAcc = null; activeAlt = null;
-        activeStatus = 'none';
-      }
-      renderActive();
-      renderFavs();
-    })
-    .catch(() => { activeStatus = 'failed'; renderActive(); });
+// Do not coerce null, blank text or booleans into the valid coordinate zero.
+function coordinate(value, limit) {
+  if ((typeof value !== 'number' && typeof value !== 'string') || String(value).trim() === '') return NaN;
+  const n = Number(value);
+  return Number.isFinite(n) && Math.abs(n) <= limit ? n : NaN;
+}
+
+function resetDeviceState(status) {
+  activeLon = null; activeLat = null; activeAcc = null; activeAlt = null;
+  activeStatus = status;
+  savedLon = null; savedLat = null; savedTimeStr = '';
+  updateStatus(); renderActive(); renderFavs();
+}
+
+function beginDeviceRequest() {
+  const seq = ++deviceRequestSeq;
+  resetDeviceState('querying');
+  return seq;
+}
+
+async function fetchDevice(url) {
+  const r = await fetch(url, { method:'GET', mode:'cors', cache:'no-store' });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+function applyDeviceState(d) {
+  // Older cached settings scripts report an empty store with this exact error.
+  if (d && d.success === false && d.error === 'No saved coordinates') {
+    resetDeviceState('none');
+    return;
+  }
+  if (!d || d.success !== true || typeof d.enabled !== 'boolean') throw new Error('Invalid device state');
+  if (d.hasCoordinates === false && d.latitude == null && d.longitude == null && !d.enabled) {
+    resetDeviceState('none');
+    return;
+  }
+  const la = coordinate(d.latitude, 90), lo = coordinate(d.longitude, 180);
+  if (d.hasCoordinates === false || !Number.isFinite(la) || !Number.isFinite(lo)) throw new Error('Invalid coordinates');
+  activeLon = lo; activeLat = la;
+  activeAcc = d.horizontalAccuracy != null ? d.horizontalAccuracy : (d.accuracy != null ? d.accuracy : null);
+  activeAlt = d.altitude != null ? d.altitude : null;
+  activeStatus = d.enabled ? 'ok' : 'disabled';
+  if (d.randomRadius != null) { const ji = document.getElementById('jitterInput'); if (ji) ji.value = d.randomRadius; }
+  // Disabled coordinates remain visible as stored data, never as an active map target.
+  if (d.enabled && !didInitialCenter && !selected) {
+    didInitialCenter = true;
+    moveTo(activeLat, activeLon, 15, activeAlt != null ? activeAlt : undefined);
+  }
+  renderActive(); renderFavs();
+}
+
+async function queryActive() {
+  if (deviceMutationPending) return; // The mutation will return the authoritative state.
+  const seq = beginDeviceRequest();
+  try {
+    const d = await fetchDevice(SAVE_API + '?action=query');
+    if (seq !== deviceRequestSeq) return;
+    applyDeviceState(d);
+  } catch(e) {
+    if (seq === deviceRequestSeq) resetDeviceState('failed');
+  }
+}
+
+// Saves/clears from older cached scripts return only success and require a query.
+async function mutationState(d) {
+  if (!d || d.success !== true) throw new Error(d && d.error || 'Device write failed');
+  return typeof d.enabled === 'boolean' ? d : fetchDevice(SAVE_API + '?action=query');
+}
+
+async function disableLocation(message) {
+  if (deviceMutationPending) return;
+  deviceMutationPending = true;
+  const seq = beginDeviceRequest();
+  try {
+    const d = await mutationState(await fetchDevice(SAVE_API + '?action=clear'));
+    if (seq !== deviceRequestSeq) return;
+    applyDeviceState(d);
+    if (activeStatus !== 'disabled' && activeStatus !== 'none') throw new Error('Location is still enabled');
+    toast(t(message), message === 'restored' ? 30000 : 2500);
+  } catch(e) {
+    if (seq === deviceRequestSeq) {
+      resetDeviceState('failed');
+      toast(t('clear_failed_cfg'), 3000);
+    }
+  } finally {
+    deviceMutationPending = false;
+  }
 }
 
 function clearActive() {
   if (!confirm(t('clear_confirm'))) return;
-  fetch(SAVE_API + '?action=clear', { method:'GET', mode:'cors', cache:'no-store' })
-    .then(r => r.json())
-    .then(d => {
-      if (d.success) {
-        activeLon = null; activeLat = null; activeAcc = null; activeAlt = null;
-        activeStatus = 'cleared';
-        renderActive();
-        renderFavs();
-        toast(t('dev_cleared'));
-      } else { toast(t('clear_failed', d.error || ''), 3000); }
-    })
-    .catch(() => { toast(t('clear_failed_cfg'), 3000); });
+  return disableLocation('dev_cleared');
 }
 
 /* ---- Save to device ---- */
 async function save() {
+  if (deviceMutationPending) return;
   if (!selected) { toast(t('pick_first')); return; }
   const btn = document.getElementById('saveBtn');
   btn.textContent = t('saving'); btn.disabled = true;
   showError(false);
+  deviceMutationPending = true;
+  const seq = beginDeviceRequest();
   try {
     let url = SAVE_API + '?lon=' + lon + '&lat=' + lat;
     const a = currentAlt(); if (a !== null) url += '&alt=' + a;
     url += '&hacc=' + haccVal() + '&vacc=' + vaccVal() + '&randomRadius=' + jitterVal();
-    const r = await fetch(url, { method: 'GET', mode: 'cors', cache: 'no-store' });
-    const d = await r.json();
-    if (d.success) {
-      activeLon = lon; activeLat = lat; activeAcc = haccVal();
-      activeAlt = currentAlt();
-      activeStatus = 'ok';
-      savedLon = lon; savedLat = lat; savedTimeStr = new Date().toLocaleTimeString();
-      btn.textContent = t('saved'); btn.className = 'btn btn-primary success';
-      updateStatus();
-      renderActive();
-      renderFavs();
-      toast(t('saved_toast'), 30000);
-      setTimeout(() => { btn.textContent = t('save'); btn.className='btn btn-primary'; btn.disabled=false; }, 2500);
-    } else {
-      throw new Error(d.error || t('write_failed'));
-    }
+    const d = await mutationState(await fetchDevice(url));
+    if (seq !== deviceRequestSeq) return;
+    applyDeviceState(d);
+    if (activeStatus !== 'ok') throw new Error('Location was not enabled');
+    // Use the acknowledged device coordinates, even if the map moved while saving.
+    savedLon = activeLon; savedLat = activeLat; savedTimeStr = new Date().toLocaleTimeString();
+    updateStatus();
+    toast(t('saved_toast'), 30000);
   } catch(e) {
-    btn.textContent = t('save'); btn.className = 'btn btn-primary'; btn.disabled = false;
-    showError(true);
-    toast(t('save_failed'), 4000);
+    if (seq === deviceRequestSeq) {
+      resetDeviceState('failed');
+      showError(true);
+      toast(t('save_failed'), 4000);
+    }
+  } finally {
+    deviceMutationPending = false;
+    btn.textContent = t('save'); btn.disabled = false;
   }
 }
 
@@ -826,17 +877,7 @@ function selectSearchResult(i) {
   toast((p.display_name || '').slice(0, 40));
 }
 function restoreReal() {
-  fetch(SAVE_API + '?action=clear', { method:'GET', mode:'cors', cache:'no-store' })
-    .then(r => r.json())
-    .then(d => {
-      if (d.success) {
-        activeLon = null; activeLat = null; activeAcc = null; activeAlt = null;
-        activeStatus = 'cleared'; savedLon = null;
-        updateStatus(); renderActive(); renderFavs();
-        toast(t('restored'), 30000);
-      } else { toast(t('clear_failed_cfg'), 3000); }
-    })
-    .catch(() => toast(t('clear_failed_cfg'), 3000));
+  return disableLocation('restored');
 }
 
 document.addEventListener('paste', e => {
