@@ -6,6 +6,7 @@
     "build": "bash scripts/build.sh",
     "validate": "node scripts/validate-artifact.mjs",
     "test": "node tests/fork.test.mjs",
+    "check:generated": "git diff --exit-code --stat -- worker/index.js",
     "preview": "node scripts/preview.mjs"
   }
 }

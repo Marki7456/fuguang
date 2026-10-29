@@ -24,6 +24,27 @@ node scripts/preview.mjs
 
 打开 `http://127.0.0.1:8787`。修改资源后重新构建并重新启动预览。
 
+## 自动构建与检查
+
+`.github/workflows/ci.yml` 在每次推送、Pull Request 和手动触发时，使用 Node.js 22 与 Python 3.12（Python 3）执行：
+
+```sh
+npm run build
+npm test
+npm run validate
+npm run check:generated
+cmp worker/index.js dist/server/index.js
+cmp .openai/hosting.json dist/.openai/hosting.json
+```
+
+项目只使用 Node.js 和 Python 标准库，没有需要安装的依赖或锁文件，因此 CI 不执行 `npm install` / `npm ci`。流程只有仓库读取权限，不发布网站、不执行 Cloudflare 部署，也不需要部署密钥。
+
+`worker/index.js` 是需要提交的生成文件。构建会内嵌 `public/`、`worker/handler.js` 和对应源码归档；README、测试、构建脚本和 CI 配置等源码文件的变化，也会使归档内容变化。修改后请运行 `npm run build`，将源码和更新后的 `worker/index.js` 一起提交；`dist/` 继续由构建生成，不提交。
+
+`npm run check:generated` 应在构建后运行：若重新生成的 `worker/index.js` 与 Git 索引中的版本不同，会显示文件变更统计并以非零状态退出。在 CI 的干净检出中，这就是与本次提交版本比较。两个 `cmp` 检查部署目录中的 Worker 和托管配置是否完整复制。
+
+上述检查覆盖网页路由、模块链接、页面脚本语法、坐标解析、模拟客户端 API 的设备配置保存/查询/清除，以及部署产物能否作为 ESM 加载并导出 `default.fetch`。它们不能验证真实 iPhone 上的定位是否生效、iOS 版本兼容性、代理客户端的模块导入和请求拦截、设备持久化行为，也不验证第三方地图服务的实时可用性。这些仍需使用目标 iPhone、iOS 版本和代理客户端实测。
+
 ## Cloudflare Workers 迁移
 
 运行 `bash scripts/build.sh` 生成 `dist/server/index.js`，部署该文件即可，无需数据库、KV 或坐标记录服务。`wrangler.jsonc` 提供独立部署配置。使用自己的 Cloudflare 账号登录后执行 `npx wrangler deploy`。
