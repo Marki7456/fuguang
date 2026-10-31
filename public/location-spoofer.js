@@ -9,6 +9,26 @@
 (function () {
   "use strict";
 
+  var CORE_VERSION = "20261101.2";
+  var DIAGNOSTIC_KEY = "ils_core_diagnostic_v1";
+
+  // Bounded local metadata only: no coordinates, URLs, headers or response bytes.
+  // Failure to write diagnostics must never affect the location response.
+  function recordDiagnostic(state, details) {
+    try {
+      if (typeof $persistentStore === "undefined" || !$persistentStore.write) return;
+      var item = { version: CORE_VERSION, timestamp: Date.now(), state: state };
+      details = details || {};
+      var keys = ["httpStatus", "wifiCount", "cellCount", "bodyLength"];
+      for (var i = 0; i < keys.length; i += 1) {
+        var value = details[keys[i]];
+        if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= 10000000) item[keys[i]] = value;
+      }
+      if (/^(arpc|synthetic|marker|bare)$/.test(details.kind || "")) item.kind = details.kind;
+      $persistentStore.write(JSON.stringify(item), DIAGNOSTIC_KEY);
+    } catch (ignore) {}
+  }
+
   var DEFAULT_CONFIG = {
     // Stateless default: OFF until a coordinate is written to the device's own
     // $persistentStore (by the picker's save-interceptor) or enabled=true is passed
@@ -1417,6 +1437,7 @@
     try {
       loaded = loadRuntimeConfigSync();
     } catch (err) {
+      recordDiagnostic("config_error");
       donePassThrough();
       return;
     }
@@ -1432,6 +1453,7 @@
       try {
         normalized = normalizeConfig(cfg);
       } catch (err) {
+        recordDiagnostic("config_error");
         if (debug) {
           console.log("Location spoofer config invalid: " + err.message + " | cfg lat/lng=" + cfg.latitude + "," + cfg.longitude);
         }
@@ -1889,6 +1911,7 @@
 
   function continueResponseRewrite(config, responseBody) {
     if (!responseBody || responseBody.length < 2) {
+      recordDiagnostic("no_body", { bodyLength: responseBody ? responseBody.length : 0 });
       if (config.debug) {
         console.log(
           "Location spoofer response body too short: " +
@@ -1911,6 +1934,7 @@
     // Runtime configuration was already normalized, including one random offset.
     var responseResult = rewriteAppleResponse(responseBody, config);
     if (!responseResult.changed) {
+      recordDiagnostic("unchanged", { bodyLength: responseBody.length, kind: responseResult.kind });
       donePassThrough();
       return;
     }
@@ -1931,6 +1955,10 @@
       console.log("Location spoofer patched locations: " + patchedPayloadSummary(responseResult.payload));
     }
     logRawDump("response-patched", responseResult.response, config);
+    recordDiagnostic("rewritten", {
+      wifiCount: responseResult.wifiCount, cellCount: responseResult.cellCount,
+      bodyLength: responseResult.response.length, kind: responseResult.kind
+    });
     doneRewriteResponse(responseResult.response, {
       wifiCount: responseResult.wifiCount,
       cellCount: responseResult.cellCount,
@@ -1955,6 +1983,7 @@
   function runShadowrocket() {
     var hasRequest = typeof $request !== "undefined" && $request != null;
     var hasResponse = typeof $response !== "undefined" && $response != null;
+    if (hasResponse) recordDiagnostic("received");
 
     if (!hasRequest && !hasResponse) {
       runMaintenanceCron();
@@ -1973,17 +2002,21 @@
     loadRuntimeConfig(function (config) {
       try {
         if (!config.enabled) {
+          recordDiagnostic("disabled");
           donePassThrough();
           return;
         }
 
         if (config.mode === "inspect") {
+          recordDiagnostic("observe_only");
           doneInspect(config, hasResponse);
           return;
         }
 
         if (hasResponse) {
           if (!isSuccessfulResponse($response)) {
+            var statusMatch = String($response.statusCode || $response.status || "").match(/\b(\d{3})\b/);
+            recordDiagnostic("upstream_error", { httpStatus: statusMatch ? Number(statusMatch[1]) : 0 });
             donePassThrough();
             return;
           }
@@ -1998,10 +2031,12 @@
             );
           }
           if (config.mode === "probe") {
+            recordDiagnostic("observe_only");
             doneResponseProbe(config);
             return;
           }
           if (config.mode !== "response") {
+            recordDiagnostic("observe_only");
             donePassThrough();
             return;
           }
@@ -2045,6 +2080,7 @@
           debug: config.debug
         });
       } catch (err) {
+        if (hasResponse) recordDiagnostic("response_error");
         if (config.debug) {
           var diagBody = hasResponse ? messageBodyToBytes($response) : messageBodyToBytes($request);
           console.log("Location spoofer failed: " + err.message + " | bodyLen=" + (diagBody ? diagBody.length : 0) + " head=" + (diagBody ? hexPreview(diagBody, 32) : "<none>"));

@@ -1,5 +1,5 @@
 name: iOS Location Spoofer (Stateless)
-desc: "任何售卖本项目/模块的都是骗子，请立即联系退款。通用脚本兼容修复 20261101.1，保留原定位响应字段，异常时原样放行。Stash，真机效果未验证。"
+desc: "任何售卖本项目/模块的都是骗子，请立即联系退款。通用脚本本机诊断 20261101.2，保留原定位响应字段，异常时原样放行。Stash，真机效果未验证。"
 homepage: https://cyberhandyman-ioslocspo.cyberhandyman.workers.dev
 
 http:
@@ -23,8 +23,8 @@ http:
 
 script-providers:
   ios-location-spoofer:
-    url: https://cyberhandyman-ioslocspo.cyberhandyman.workers.dev/location-spoofer.js?v=20261101.1
+    url: https://cyberhandyman-ioslocspo.cyberhandyman.workers.dev/location-spoofer.js?v=20261101.2
     interval: 86400
   ios-location-settings:
-    url: https://cyberhandyman-ioslocspo.cyberhandyman.workers.dev/location-settings.js?v=20261101.1
+    url: https://cyberhandyman-ioslocspo.cyberhandyman.workers.dev/location-settings.js?v=20261101.2
     interval: 86400

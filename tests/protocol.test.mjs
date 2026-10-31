@@ -87,7 +87,15 @@ function runEntry(options = {}) {
     $request: { url: 'https://gs-loc.apple.com/clls/wloc' },
     $response: response,
     $argument: options.argument || 'mode=response&debug=false',
-    $persistentStore: { read: key => store[key] ?? null },
+    $persistentStore: {
+      read: key => store[key] ?? null,
+      write(value, key) {
+        if (options.failDiagnosticWrite) throw new Error('Storage denied');
+        store[key] = value;
+        if (key === 'ils_core_diagnostic_v1' && options.diagnostics) options.diagnostics.push(JSON.parse(value));
+        return true;
+      }
+    },
     $done: result => calls.push(result)
   };
   if (options.utils) box.$utils = options.utils;
@@ -375,4 +383,46 @@ test('runtime applies a saved random radius once and uses one shared coordinate 
     assert.equal(signed(field(cellLocation, 1)), signed(field(wifiLocation, 1)));
     assert.equal(signed(field(cellLocation, 2)), signed(field(wifiLocation, 2)));
   }
+});
+
+
+test('local diagnostics distinguish submitted rewrites from disabled, invalid config, upstream errors and pass-through', () => {
+  const cases = [
+    [{}, 'rewritten'],
+    [{ store: { enabled: 'false' } }, 'disabled'],
+    [{ argument: 'mode=probe&debug=false' }, 'observe_only'],
+    [{ store: { latitude: '91' } }, 'config_error'],
+    [{ response: { status: 503, headers: {}, body: bytes([1,2]) } }, 'upstream_error'],
+    [{ response: { status: 200, headers: {}, body: bytes([]) } }, 'no_body'],
+    [{ response: { status: 200, headers: {}, body: bytes([0xff,0xff,0xff]) } }, 'response_error'],
+    [{ response: { status: 200, headers: {}, body: envelope('bare', v(3, 7)) } }, 'unchanged']
+  ];
+  for (const [options, state] of cases) {
+    const diagnostics = [];
+    const result = runEntry({ ...options, diagnostics });
+    assert.equal(diagnostics[0].state, 'received');
+    const last = diagnostics.at(-1);
+    assert.equal(last.state, state);
+    assert.equal(last.version, '20261101.2');
+    assert.ok(last.timestamp > 0);
+    if (state === 'rewritten') {
+      assert.ok(result.body);
+      assert.equal(last.wifiCount, 1);
+      assert.equal(last.cellCount, 2);
+    } else isPassThrough(result);
+    if (state === 'upstream_error') assert.equal(last.httpStatus, 503);
+    for (const item of diagnostics) {
+      for (const key of Object.keys(item)) assert.ok(['version','timestamp','state','httpStatus','wifiCount','cellCount','bodyLength','kind'].includes(key));
+      const text = JSON.stringify(item);
+      assert.ok(!text.includes('latitude') && !text.includes('longitude') && !text.includes('https:') && !text.includes('headers'));
+    }
+  }
+});
+
+test('diagnostic storage failures never change response rewrite or fail-open behavior', () => {
+  const baseline = runEntry();
+  const denied = runEntry({ failDiagnosticWrite: true });
+  sameBytes(denied.body, baseline.body);
+  isPassThrough(runEntry({ failDiagnosticWrite: true, store: { enabled: 'false' } }));
+  isPassThrough(runEntry({ failDiagnosticWrite: true, response: { status: 200, headers: {}, body: bytes([0xff]) } }));
 });

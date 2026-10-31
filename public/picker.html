@@ -173,7 +173,7 @@ body {
 </style>
 </head>
 <body>
-<div style="position:relative;z-index:10001;text-align:center;padding:12px 16px;background:#17313a;border-bottom:1px solid #2f6974;color:#d8f8ff;font:13px/1.6 -apple-system,system-ui,sans-serif">我的独立副本 · 网页修复版 1.1.1 · <a href="/source.zip" style="color:#7fe3ea">下载完整源码</a> · 保留原作者署名</div>
+<div style="position:relative;z-index:10001;text-align:center;padding:12px 16px;background:#17313a;border-bottom:1px solid #2f6974;color:#d8f8ff;font:13px/1.6 -apple-system,system-ui,sans-serif">我的独立副本 · 网页诊断版 1.2.0 · <a href="/source.zip" style="color:#7fe3ea">下载完整源码</a> · 保留原作者署名</div>
 <div class="topbar">
   <a class="back" href="/">← 主页</a>
   <span class="topcredit">📺 <a class="ytname" href="https://www.youtube.com/@CyberHandyman/videos" target="_blank" rel="noopener">YouTube CyberHandyman 赛博工具人</a><span class="forkline"> · fork from 鸣谢贡献者: Yu9191 / mekos2772 / acheong08 <span class="v11">· 原站标注 Yu9191 v1.1</span></span></span>
@@ -191,9 +191,9 @@ body {
     <li>更新同名模块，只保留一份；更新后断开并重新连接小火箭。</li>
     <li>刷新本页，重新保存位置，再打开地图验证。若仍转圈，请停用模块恢复。</li>
   </ol>
-  <a id="updateModule" class="btn btn-primary" href="/ios-location-spoofer.sgmodule?v=20261101.1">在小火箭中更新模块</a>
-  <a href="/ios-location-spoofer.sgmodule?v=20261101.1">手动打开模块链接</a>
-  <p>网页 1.1.1 已修复横向拖动后的经度越界；本次刷新网页即可。模块修复版本：20261101.1。只刷新网页不会更新手机脚本。保存成功仅表示设备配置已写入，不代表 iPhone 已接受定位。</p>
+  <a id="updateModule" class="btn btn-primary" href="/ios-location-spoofer.sgmodule?v=20261101.2">在小火箭中更新模块</a>
+  <a href="/ios-location-spoofer.sgmodule?v=20261101.2">手动打开模块链接</a>
+  <p>诊断版 1.2.0：需更新同名小火箭模块至 20261101.2，才能查看脚本实际处理记录。保存成功仅表示设备配置已写入，不代表 iPhone 已接受定位。</p>
   <p id="settingsState" role="status">正在检查设备设置脚本版本…</p>
 </section>
 <div style="position:relative">
@@ -251,6 +251,11 @@ body {
       <div class="label" data-i18n="active_label">On-device coordinates (latitude/longitude/altitude)</div>
       <div class="value" id="activeValue">Querying...</div>
     </div>
+    <div class="accnote" style="font-size:13px" aria-live="polite">
+      <b data-i18n="diag_title">定位脚本最近处理</b>
+      <div id="coreDiagnostic"></div>
+      <p class="hint" data-i18n="diag_hint">保存后打开地图请求定位，再回本页点「刷新」。记录只在当前设备，不含坐标或原始响应；“已改写”也不代表 iOS 已采纳位置。</p>
+    </div>
     <div class="row">
       <button class="btn btn-sm btn-secondary" id="refreshBtn" data-i18n="refresh" onclick="queryActive()">Refresh</button>
       <button class="btn btn-sm btn-danger" id="clearDeviceBtn" data-i18n="clear_data" onclick="clearActive()">Clear Data</button>
@@ -289,7 +294,8 @@ body {
 </div>
 <script>
 const SAVE_API = 'https://gs-loc.apple.com/ils-settings/save';
-const SETTINGS_VERSION = '20261101.1';
+const SETTINGS_VERSION = '20261101.2';
+let lastDiagnostic = null, diagnosticSupported = false;
 const DEVICE_TIMEOUT_MS = 8000;
 let deviceBusy = false;
 document.getElementById('updateModule').href = 'shadowrocket://install?module=' + encodeURIComponent(location.origin + '/ios-location-spoofer.sgmodule?v=' + SETTINGS_VERSION);
@@ -310,6 +316,20 @@ let savedLon = null, savedLat = null, savedTimeStr = '';
 const I18N = {
   zh: {
     title: 'iOS 虚拟定位',
+    diag_title: '定位脚本最近处理', diag_hint: '保存后打开地图请求定位，再回本页点「刷新」。记录只在当前设备，不含坐标或原始响应；“已改写”也不代表 iOS 已采纳位置。',
+    diag_update: '请先更新小火箭模块至诊断版，再刷新设备状态。',
+    diag_none: '暂无记录。打开地图请求定位后再刷新；若始终没有记录，可能尚未触发拦截、仍在使用旧核心，或诊断存储不可用。',
+    diag_received: '脚本已收到响应，尚未记录处理完成；若长期如此，请检查脚本错误或超时。',
+    diag_disabled: '收到响应时，设备配置为停用。请重新保存目标位置。',
+    diag_config_error: '设备配置读取失败或无效；本次已原样放行。',
+    diag_no_body: '定位响应没有可处理的正文；本次已原样放行。',
+    diag_unchanged: '响应未发生改写：可能没有可修改的坐标，或内容本来已相同。',
+    diag_rewritten: '已向客户端提交改写后的响应；仍需在地图确认结果。',
+    diag_upstream_error: '定位服务返回异常状态；本次已原样放行。',
+    diag_response_error: '响应解压或解析失败；本次已原样放行。',
+    diag_observe_only: '当前脚本处于观察模式，没有改写坐标。',
+    diag_unknown: '无法识别的诊断状态。', diag_old: '较早的记录，请重新触发定位后刷新', diag_old_core: '记录来自旧核心，请更新模块',
+
     layer_satellite: '卫星', layer_amap: '高德', layer_color: '彩色', layer_standard: '标准', layer_dark: '暗色',
     err_html: '<b>尚未确认设备保存</b>请先更新本页提供的小火箭模块，再检查：<br>1. 已安装并启用 iOS Location Spoofer 模块<br>2. MITM 已开启且信任证书<br>3. MITM 主机名包含 gs-loc.apple.com<br>4. 当前网络已走代理',
     choose_title: '选择目标位置',
@@ -329,7 +349,7 @@ const I18N = {
     status_hint: '选好位置后点击「储存到设备」写入代理工具',
     modal_title: '收藏此位置', modal_ph: '输入备注名称（如: 公司、家）', cancel: '取消', save_short: '保存',
     acc: '精度', restore: '恢复真实定位', restored: '✓ 已发送停用指令。重新打开地图确认恢复；若仍转圈，请在小火箭中停用定位模块。', hacc: '水平精度', vacc: '垂直精度', jitter: '扰动半径(米)',
-    disabled: '已保存但停用', disabled_empty: '已停用虚拟定位', unverified: '旧版设置脚本，请先更新模块', version_old: '未检测到修复版设置脚本，请先更新小火箭模块并重新连接。', version_ok: '设置脚本 20261101.1 已连接；此检查不代表定位核心或 iOS 生效。', version_unknown: '无法连接设备设置脚本，请检查小火箭模块和连接。', timeout: '设备响应超过 8 秒，结果未确认。请检查小火箭连接；若地图仍转圈，停用定位模块。', invalid_settings: '水平精度必须大于 0，扰动半径须为 0–10000 米。',
+    disabled: '已保存但停用', disabled_empty: '已停用虚拟定位', unverified: '旧版设置脚本，请先更新模块', version_old: '未检测到修复版设置脚本，请先更新小火箭模块并重新连接。', version_ok: '设置脚本 20261101.2 已连接；此检查不代表定位核心或 iOS 生效。', version_unknown: '无法连接设备设置脚本，请检查小火箭模块和连接。', timeout: '设备响应超过 8 秒，结果未确认。请检查小火箭连接；若地图仍转圈，停用定位模块。', invalid_settings: '水平精度必须大于 0，扰动半径须为 0–10000 米。',
     querying: '查询中...', no_saved: '无已保存的坐标', query_failed: '查询失败，无法确认定位状态 (请检查代理模块)', cleared: '已清除',
     fav_empty: '暂无收藏，选好位置后点击「收藏位置」',
     active_now: '✓ 设备已保存', del: '删除',
@@ -363,6 +383,20 @@ const I18N = {
   },
   en: {
     title: 'iOS Location Spoofer',
+    diag_title: 'Last location-script result', diag_hint: 'After saving, request location in Maps, then return and refresh. Records stay on this device without coordinates or raw responses. A rewritten response does not confirm iOS accepted the location.',
+    diag_update: 'Update the client module to the diagnostic version, then refresh device status.',
+    diag_none: 'No record yet. Request location in Maps and refresh. If none appears, interception may not have run, the core may be old, or diagnostic storage may be unavailable.',
+    diag_received: 'Response received, but completion has not been recorded. Check script errors or timeout if this persists.',
+    diag_disabled: 'Location changes were disabled when the response arrived. Save the target again.',
+    diag_config_error: 'Invalid or unreadable device settings; original response passed through.',
+    diag_no_body: 'No usable response body; original response passed through.',
+    diag_unchanged: 'No rewrite: coordinates may be absent or already identical.',
+    diag_rewritten: 'Rewritten response submitted to the client. Check the actual result in Maps.',
+    diag_upstream_error: 'Location service returned an unsuccessful status; original response passed through.',
+    diag_response_error: 'Decompression or parsing failed; original response passed through.',
+    diag_observe_only: 'Observation mode; coordinates were not rewritten.',
+    diag_unknown: 'Unknown diagnostic state.', diag_old: 'Older record: request location again and refresh', diag_old_core: 'Record is from an older core; update the module',
+
     layer_satellite: 'Satellite', layer_amap: 'Amap', layer_color: 'Color', layer_standard: 'Standard', layer_dark: 'Dark',
     err_html: '<b>Device save was not confirmed</b>Update the module from this page, then check:<br>1. The iOS Location Spoofer module is installed and enabled<br>2. MITM is on and the certificate is trusted<br>3. The MITM hostname list includes gs-loc.apple.com<br>4. The current network is routed through the proxy',
     choose_title: 'Choose target location',
@@ -382,7 +416,7 @@ const I18N = {
     status_hint: 'Pick a location, then tap "Save to Device" to write it to your proxy tool',
     modal_title: 'Add this location to favorites', modal_ph: 'Enter a label (e.g. Office, Home)', cancel: 'Cancel', save_short: 'Save',
     acc: 'Accuracy', restore: 'Restore real location', restored: '✓ Disable command confirmed. Reopen Maps to check recovery; if it still spins, turn off the location module in your client.', hacc: 'H. accuracy', vacc: 'V. accuracy', jitter: 'Jitter radius(m)',
-    disabled: 'Saved but disabled', disabled_empty: 'Location changes disabled', unverified: 'Old settings script: update the module first', version_old: 'Updated settings script not detected. Update the module and reconnect your client.', version_ok: 'Settings script 20261101.1 connected; this does not verify the response script or iOS location.', version_unknown: 'Cannot reach device settings. Check the module and client connection.', timeout: 'No confirmed device response within 8 seconds. Check your client; disable the module if Maps keeps spinning.', invalid_settings: 'Accuracy must be positive; jitter must be 0–10000 metres.',
+    disabled: 'Saved but disabled', disabled_empty: 'Location changes disabled', unverified: 'Old settings script: update the module first', version_old: 'Updated settings script not detected. Update the module and reconnect your client.', version_ok: 'Settings script 20261101.2 connected; this does not verify the response script or iOS location.', version_unknown: 'Cannot reach device settings. Check the module and client connection.', timeout: 'No confirmed device response within 8 seconds. Check your client; disable the module if Maps keeps spinning.', invalid_settings: 'Accuracy must be positive; jitter must be 0–10000 metres.',
     querying: 'Querying...', no_saved: 'No saved coordinates', query_failed: 'Query failed; device state unknown (check the proxy module)', cleared: 'Cleared',
     fav_empty: 'No favorites yet. Pick a location and tap "Add Favorite".',
     active_now: '✓ Saved on device', del: 'Delete',
@@ -441,6 +475,7 @@ function applyI18n() {
   updateCoords();
   updateStatus();
   renderActive();
+  renderDiagnostic();
   renderFavs();
 }
 
@@ -780,7 +815,27 @@ function setDeviceBusy(value) {
 function showSettingsVersion(data) {
   const current = data && data.settingsVersion === SETTINGS_VERSION;
   document.getElementById('settingsState').textContent = t(current ? 'version_ok' : 'version_old');
+  diagnosticSupported = current && Object.prototype.hasOwnProperty.call(data, 'diagnostics');
+  lastDiagnostic = diagnosticSupported ? data.diagnostics : null;
+  renderDiagnostic();
   return current;
+}
+function renderDiagnostic() {
+  const el = document.getElementById('coreDiagnostic');
+  if (!diagnosticSupported) { el.textContent = t('diag_update'); return; }
+  const d = lastDiagnostic;
+  if (!d || typeof d.timestamp !== 'number' || !Number.isFinite(d.timestamp) || d.timestamp <= 0) {
+    el.textContent = t('diag_none'); return;
+  }
+  const states = ['received','disabled','config_error','no_body','unchanged','rewritten','upstream_error','response_error','observe_only'];
+  let message = t(states.includes(d.state) ? 'diag_' + d.state : 'diag_unknown');
+  if (d.state === 'rewritten') message += ' · Wi-Fi ' + (Number.isSafeInteger(d.wifiCount) ? d.wifiCount : 0) + ' / Cell ' + (Number.isSafeInteger(d.cellCount) ? d.cellCount : 0);
+  if (d.state === 'upstream_error' && Number.isInteger(d.httpStatus) && d.httpStatus >= 100 && d.httpStatus <= 599) message += ' · HTTP ' + d.httpStatus;
+  const old = Date.now() - d.timestamp > 600000 || d.timestamp > Date.now() + 60000;
+  message += ' · ' + new Date(d.timestamp).toLocaleString();
+  if (old) message += ' · ' + t('diag_old');
+  if (d.version !== SETTINGS_VERSION) message += ' · ' + t('diag_old_core');
+  el.textContent = message;
 }
 function resetActive(status) {
   savedLon = null; updateStatus();

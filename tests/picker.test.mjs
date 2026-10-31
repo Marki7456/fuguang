@@ -6,7 +6,7 @@ import vm from 'node:vm';
 const html = await readFile(new URL('../public/picker.html', import.meta.url), 'utf8');
 const inlineScripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)]
   .map(match => match[1]).filter(script => script.trim());
-const version = '20261101.1';
+const version = '20261101.2';
 const buttons = ['saveBtn', 'restoreBtn', 'clearDeviceBtn', 'refreshBtn'];
 const valid = (extra = {}) => ({
   success: true, hasCoordinates: true, enabled: true, settingsVersion: version, latitude: 22, longitude: 114,
@@ -625,4 +625,30 @@ test('search and browser geolocation do not report success for out-of-range coor
   assert.equal(p.mapViews.length, before);
   assert.notEqual(p.elements.get('toast').textContent, p.api.t('got_loc'));
   assert.equal(p.elements.get('toast').textContent, p.api.t('invalid_coordinates'));
+});
+
+test('diagnostic status distinguishes no record, submitted rewrite, stale data and upstream failure without claiming iOS accepted it', async () => {
+  const p = await picker();
+  p.fetchWith(async () => response(valid({ diagnostics: null })));
+  await p.api.queryActive();
+  assert.match(p.elements.get('coreDiagnostic').textContent, /暂无记录/);
+  assert.equal(p.api.state().activeStatus, 'ok', 'saved settings remain separate from interception status');
+  const base = { version, timestamp: Date.now(), state: 'rewritten', wifiCount: 2, cellCount: 1 };
+  p.fetchWith(async () => response(valid({ diagnostics: base })));
+  await p.api.queryActive();
+  assert.match(p.elements.get('coreDiagnostic').textContent, /已向客户端提交/);
+  assert.match(p.elements.get('coreDiagnostic').textContent, /Wi-Fi 2 \/ Cell 1/);
+  assert.match(p.elements.get('coreDiagnostic').textContent, /仍需在地图确认/);
+  p.fetchWith(async () => response(valid({ diagnostics: { ...base, timestamp: Date.now() - 900000, version: '20261101.1' } })));
+  await p.api.queryActive();
+  assert.match(p.elements.get('coreDiagnostic').textContent, /较早的记录/);
+  assert.match(p.elements.get('coreDiagnostic').textContent, /旧核心/);
+  p.fetchWith(async () => response(valid({ diagnostics: { ...base, state: 'upstream_error', httpStatus: 503 } })));
+  await p.api.queryActive();
+  assert.match(p.elements.get('coreDiagnostic').textContent, /原样放行/);
+  assert.match(p.elements.get('coreDiagnostic').textContent, /HTTP 503/);
+  p.fetchWith(async () => response(valid({ diagnostics: { ...base, state: '<img src=x>' } })));
+  await p.api.queryActive();
+  assert.match(p.elements.get('coreDiagnostic').textContent, /无法识别/);
+  assert.ok(!p.elements.get('coreDiagnostic').textContent.includes('<img'));
 });

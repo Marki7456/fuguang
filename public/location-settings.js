@@ -22,7 +22,8 @@
   "use strict";
 
   var isQuanX = typeof $task !== "undefined";
-  var SETTINGS_VERSION = "20261101.1";
+  var SETTINGS_VERSION = "20261101.2";
+  var DIAGNOSTIC_KEY = "ils_core_diagnostic_v1";
   var MAX_RANDOM_RADIUS = 10000;
   var MAX_ACCURACY = 9007199254740991;
   var numericKeys = ["latitude", "longitude", "altitude", "horizontalAccuracy", "verticalAccuracy", "randomRadius"];
@@ -36,6 +37,26 @@
     } catch (e) {
       return false;
     }
+  }
+
+  function readDiagnostic() {
+    try {
+      var text = readKey(DIAGNOSTIC_KEY);
+      if (typeof text !== "string" || text.length > 2048) return null;
+      var item = JSON.parse(text);
+      if (!item || !/^\d{8}\.\d{1,3}$/.test(item.version || "") ||
+          !/^(received|disabled|config_error|no_body|unchanged|rewritten|upstream_error|response_error|observe_only)$/.test(item.state || "") ||
+          typeof item.timestamp !== "number" || !isFinite(item.timestamp) || Math.floor(item.timestamp) !== item.timestamp ||
+          item.timestamp <= 0 || item.timestamp > Date.now() + 60000) return null;
+      var clean = { version: item.version, timestamp: item.timestamp, state: item.state };
+      var keys = ["httpStatus", "wifiCount", "cellCount", "bodyLength"];
+      for (var i = 0; i < keys.length; i += 1) {
+        var value = item[keys[i]];
+        if (typeof value === "number" && isFinite(value) && Math.floor(value) === value && value >= 0 && value <= 10000000) clean[keys[i]] = value;
+      }
+      if (/^(arpc|synthetic|marker|bare)$/.test(item.kind || "")) clean.kind = item.kind;
+      return clean;
+    } catch (ignore) { return null; }
   }
 
   function parseQuery(url) {
@@ -223,6 +244,7 @@
   }
 
   result.settingsVersion = SETTINGS_VERSION;
+  if (method === "GET") result.diagnostics = readDiagnostic();
   var headers = {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": "*",

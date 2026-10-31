@@ -45,10 +45,37 @@ function client(qx, options = {}) {
     assert.equal(response.headers['Access-Control-Allow-Origin'], '*');
     assert.equal(response.headers['Cache-Control'], 'no-store');
     const result = JSON.parse(response.body);
-    assert.equal(result.settingsVersion, '20261101.1', 'every response identifies the running settings script');
+    assert.equal(result.settingsVersion, '20261101.2', 'every response identifies the running settings script');
     return result;
   }
   return { store, writes, reads, run };
+}
+
+for (const qx of [false, true]) {
+  test(`diagnostics (${qx ? 'prefs' : 'persistentStore'}): return only bounded local metadata and tolerate bad records`, () => {
+    const timestamp = Date.now();
+    const raw = {
+      version: '20261101.2', timestamp, state: 'rewritten', wifiCount: 2, cellCount: 3, bodyLength: 100,
+      kind: 'bare', latitude: 12, longitude: 34, headers: { authorization: 'private' }, body: 'private'
+    };
+    const c = client(qx, { initial: { ...saved, ils_core_diagnostic_v1: JSON.stringify(raw) } });
+    assert.deepEqual(c.run('action=query').diagnostics, {
+      version: raw.version, timestamp, state: 'rewritten', wifiCount: 2, cellCount: 3, bodyLength: 100, kind: 'bare'
+    });
+    assert.equal(c.writes.length, 0, 'reading diagnostics does not change location settings');
+    for (const record of ['not-json', 'x'.repeat(2049), JSON.stringify({ ...raw, state: 'private' }), JSON.stringify({ ...raw, timestamp: 1e30 })]) {
+      c.store.set('ils_core_diagnostic_v1', record);
+      const result = c.run('action=query');
+      assert.equal(result.success, true);
+      assert.equal(result.diagnostics, null);
+    }
+    const denied = client(qx, { initial: saved, read: (key, store) => {
+      if (key === 'ils_core_diagnostic_v1') throw new Error('Diagnostic storage denied');
+      return store.get(key);
+    } });
+    assert.equal(denied.run('action=query').success, true);
+    assert.equal(denied.run('action=query').diagnostics, null);
+  });
 }
 
 for (const qx of [false, true]) {
@@ -269,11 +296,11 @@ for (const qx of [false, true]) {
     for (const initial of [{}, { enabled: 'false' }, { latitude: '', longitude: '', enabled: 'false' }]) {
       const c = client(qx, { initial });
       assert.deepEqual(c.run('action=query'), {
-        success: true, hasCoordinates: false, enabled: false, settingsVersion: '20261101.1'
+        success: true, hasCoordinates: false, enabled: false, settingsVersion: '20261101.2', diagnostics: null
       });
       assert.deepEqual(c.writes, []);
       assert.deepEqual(c.run('action=clear'), {
-        success: true, hasCoordinates: false, enabled: false, settingsVersion: '20261101.1'
+        success: true, hasCoordinates: false, enabled: false, settingsVersion: '20261101.2', diagnostics: null
       });
     }
   });

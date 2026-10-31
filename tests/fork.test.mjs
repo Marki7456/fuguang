@@ -41,7 +41,7 @@ for (const client of clients) {
     assert.equal(empty.success, true);
     assert.equal(empty.hasCoordinates, false);
     assert.equal(empty.enabled, false);
-    assert.equal(empty.settingsVersion, '20261101.1');
+    assert.equal(empty.settingsVersion, '20261101.2');
     const storage = new Map([['ils_favorites', JSON.stringify([{name:'Regression point',lat:la,lon:lo}])]]);
     let page = createPicker(picker, device, storage);
     await page.ready(); // page initialization with no saved point
@@ -181,7 +181,7 @@ for (const client of clients) {
   assertDisplay(page, 'unverified', page.read("t('unverified')"));
   assert.equal(page.read('activeLat'), null);
   assert.equal(page.read('activeLon'), null);
-  page.intercept(() => new Response(JSON.stringify({success:true,enabled:true,latitude:'0',longitude:'0',settingsVersion:'20261101.1'})));
+  page.intercept(() => new Response(JSON.stringify({success:true,enabled:true,latitude:'0',longitude:'0',settingsVersion:'20261101.2'})));
   await page.box.queryActive();
   assertDisplay(page, 'ok', page.read("t('lon')"));
   assert.equal(page.read('activeLat'), 0);

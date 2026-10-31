@@ -1,10 +1,10 @@
 #!name=iOS Location Spoofer (Stateless)
-#!desc=任何售卖本项目/模块的都是骗子，请立即联系退款。通用脚本兼容修复 20261101.1，保留原定位响应字段，异常时原样放行。Loon 插件，真机效果未验证。
+#!desc=任何售卖本项目/模块的都是骗子，请立即联系退款。通用脚本本机诊断 20261101.2，保留原定位响应字段，异常时原样放行。Loon 插件，真机效果未验证。
 #!homepage=https://cyberhandyman-ioslocspo.cyberhandyman.workers.dev
 
 [Script]
-http-response ^https?:\/\/(?:gs-loc(?:-cn)?\.apple\.com|bluedot\.is\.autonavi\.com(?:\.gds\.alibabadns\.com)?)\/clls\/wloc(?:\?.*)?$ script-path=https://cyberhandyman-ioslocspo.cyberhandyman.workers.dev/location-spoofer.js?v=20261101.1, requires-body=true, binary-body-mode=true, max-size=1048576, timeout=12, tag=iOS Location Spoofer, argument=mode=response&debug=false
-http-request ^https?:\/\/gs-loc(?:-cn)?\.apple\.com\/ils-settings\/ script-path=https://cyberhandyman-ioslocspo.cyberhandyman.workers.dev/location-settings.js?v=20261101.1, requires-body=false, timeout=10, tag=iLS Settings
+http-response ^https?:\/\/(?:gs-loc(?:-cn)?\.apple\.com|bluedot\.is\.autonavi\.com(?:\.gds\.alibabadns\.com)?)\/clls\/wloc(?:\?.*)?$ script-path=https://cyberhandyman-ioslocspo.cyberhandyman.workers.dev/location-spoofer.js?v=20261101.2, requires-body=true, binary-body-mode=true, max-size=1048576, timeout=12, tag=iOS Location Spoofer, argument=mode=response&debug=false
+http-request ^https?:\/\/gs-loc(?:-cn)?\.apple\.com\/ils-settings\/ script-path=https://cyberhandyman-ioslocspo.cyberhandyman.workers.dev/location-settings.js?v=20261101.2, requires-body=false, timeout=10, tag=iLS Settings
 
 [MITM]
 hostname = gs-loc.apple.com, gs-loc-cn.apple.com, bluedot.is.autonavi.com, bluedot.is.autonavi.com.gds.alibabadns.com
