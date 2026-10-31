@@ -173,7 +173,7 @@ body {
 </style>
 </head>
 <body>
-<div style="position:relative;z-index:10001;text-align:center;padding:12px 16px;background:#17313a;border-bottom:1px solid #2f6974;color:#d8f8ff;font:13px/1.6 -apple-system,system-ui,sans-serif">我的独立副本 · 兼容修复版 1.1 · <a href="/source.zip" style="color:#7fe3ea">下载完整源码</a> · 保留原作者署名</div>
+<div style="position:relative;z-index:10001;text-align:center;padding:12px 16px;background:#17313a;border-bottom:1px solid #2f6974;color:#d8f8ff;font:13px/1.6 -apple-system,system-ui,sans-serif">我的独立副本 · 网页修复版 1.1.1 · <a href="/source.zip" style="color:#7fe3ea">下载完整源码</a> · 保留原作者署名</div>
 <div class="topbar">
   <a class="back" href="/">← 主页</a>
   <span class="topcredit">📺 <a class="ytname" href="https://www.youtube.com/@CyberHandyman/videos" target="_blank" rel="noopener">YouTube CyberHandyman 赛博工具人</a><span class="forkline"> · fork from 鸣谢贡献者: Yu9191 / mekos2772 / acheong08 <span class="v11">· 原站标注 Yu9191 v1.1</span></span></span>
@@ -193,7 +193,7 @@ body {
   </ol>
   <a id="updateModule" class="btn btn-primary" href="/ios-location-spoofer.sgmodule?v=20261101.1">在小火箭中更新模块</a>
   <a href="/ios-location-spoofer.sgmodule?v=20261101.1">手动打开模块链接</a>
-  <p>修复版本：20261101.1。只刷新网页不会更新手机脚本。保存成功仅表示设备配置已写入，不代表 iPhone 已接受定位。</p>
+  <p>网页 1.1.1 已修复横向拖动后的经度越界；本次刷新网页即可。模块修复版本：20261101.1。只刷新网页不会更新手机脚本。保存成功仅表示设备配置已写入，不代表 iPhone 已接受定位。</p>
   <p id="settingsState" role="status">正在检查设备设置脚本版本…</p>
 </section>
 <div style="position:relative">
@@ -346,7 +346,12 @@ const I18N = {
     written: function(lo, la, ts){ return '✓ 已写入: ' + lo.toFixed(6) + ', ' + la.toFixed(6) + ' · ' + ts; },
     saved_toast: '✓ 已写入设备。请打开地图确认；若仍一直转圈，停用定位模块恢复。',
     video_btn: '▶️ 视频教程（YouTube）',
-    save_failed: '✗ 储存失败 - 请检查模块配置', write_failed: '写入失败',
+    invalid_coordinates: '坐标格式或范围无效，请重新选点。纬度须在 ±90° 内，经度须在 ±180° 内。',
+    invalid_favorite: '此收藏坐标无效，请重新选点收藏',
+    save_storage_disabled: '储存失败：设备写入未完成，虚拟定位已停用。请重试保存。',
+    save_storage_unknown: '储存失败：设备写入和停用状态未确认。若地图仍转圈，请在小火箭中手动停用定位模块。',
+    save_unconfirmed: '储存失败：设备返回的坐标或启用状态与本次保存不符，请刷新状态后重试。',
+    save_failed: '储存失败：设备未确认写入，请重试。', write_failed: '写入失败',
     no_geo: '浏览器不支持定位', getting_loc: '获取位置中...', got_loc: '已获取当前位置',
     loc_failed: function(m){ return '定位失败: ' + m; },
     paste_first: '请粘贴地图链接或坐标', parse_failed: '无法解析坐标，请检查链接格式', parsing: '解析中...',
@@ -394,7 +399,12 @@ const I18N = {
     written: function(lo, la, ts){ return '✓ Written: ' + lo.toFixed(6) + ', ' + la.toFixed(6) + ' · ' + ts; },
     saved_toast: '✓ Settings saved on device. Check in Maps; if it keeps spinning, disable the location module.',
     video_btn: '▶️ Video tutorial (YouTube)',
-    save_failed: '✗ Save failed - please check the module configuration', write_failed: 'Write failed',
+    invalid_coordinates: 'Invalid coordinates. Pick a point again; latitude must be within ±90° and longitude within ±180°.',
+    invalid_favorite: 'Invalid saved point. Pick and favorite it again.',
+    save_storage_disabled: 'Save failed: device storage did not complete. Location changes are disabled; try saving again.',
+    save_storage_unknown: 'Save failed: storage and disabled state are unconfirmed. Disable the module in your client if Maps keeps spinning.',
+    save_unconfirmed: 'Save failed: the returned coordinates or enabled state did not match. Refresh device status and try again.',
+    save_failed: 'Save failed: device write was not confirmed. Please try again.', write_failed: 'Write failed',
     no_geo: 'Browser does not support geolocation', getting_loc: 'Getting location...', got_loc: 'Current location acquired',
     loc_failed: function(m){ return 'Location failed: ' + m; },
     paste_first: 'Please paste a map link or coordinates', parse_failed: 'Could not parse coordinates, please check the link format', parsing: 'Parsing...',
@@ -461,8 +471,8 @@ let marker = L.marker([lat, lon], {draggable:true});
 let markerShown = false;
 function showMarker() { if (!markerShown) { marker.addTo(map); markerShown = true; } }
 
-marker.on('dragend', e => { const p=e.target.getLatLng(); setPos(p.lat, p.lng); });
-map.on('click', e => { setPos(e.latlng.lat, e.latlng.lng); });
+marker.on('dragend', e => { const p=e.target.getLatLng(); setMapPos(p.lat, p.lng); });
+map.on('click', e => { setMapPos(e.latlng.lat, e.latlng.lng); });
 
 /* Elevation is a read-only reference; the response script preserves original altitude. */
 function currentAlt() {
@@ -503,23 +513,53 @@ function updateStatus() {
     : t('status_hint');
 }
 
-function setPos(newLat, newLon, knownAlt) {
-  lat = newLat; lon = newLon; selected = true;
+// Leaflet repeats the world horizontally. Keep the marker in the visible copy,
+// but use one geographic longitude for display, storage and external requests.
+function wrapMapLongitude(value) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || Math.abs(value) > Number.MAX_SAFE_INTEGER) return null;
+  let wrapped = value % 360;
+  if (wrapped > 180) wrapped -= 360;
+  if (wrapped < -180) wrapped += 360;
+  return wrapped === 0 ? 0 : wrapped;
+}
+function coordinateError() {
+  showError(true, t('invalid_coordinates'));
+  toast(t('invalid_coordinates'), 6000);
+  return false;
+}
+function validSelection() {
+  if (!selected) { toast(t('pick_first')); return false; }
+  if (deviceCoordinate(lat, 90) === null || deviceCoordinate(lon, 180) === null) return coordinateError();
+  return true;
+}
+function setMapPos(newLat, displayLon) {
+  const wrapped = wrapMapLongitude(displayLon);
+  if (wrapped === null) return coordinateError();
+  return setPos(newLat, wrapped, undefined, displayLon);
+}
+function setPos(newLat, newLon, knownAlt, displayLon) {
+  const la = deviceCoordinate(newLat, 90), lo = deviceCoordinate(newLon, 180);
+  if (la === null || lo === null) return coordinateError();
+  lat = la; lon = lo; selected = true;
+  showError(false);
   showMarker();
-  marker.setLatLng([lat, lon]);
-  if (typeof knownAlt === 'number') { elev = Math.round(knownAlt); elevState = 'ok'; elevCache.set(elevKey(lat, lon), elev); }
+  marker.setLatLng([lat, Number.isFinite(displayLon) ? displayLon : lon]);
+  if (typeof knownAlt === 'number' && Number.isFinite(knownAlt)) { elev = Math.round(knownAlt); elevState = 'ok'; elevCache.set(elevKey(lat, lon), elev); }
   updateCoords();
   fetchElevation(lat, lon);
+  return true;
 }
 
 function moveTo(newLat, newLon, zoom, knownAlt) {
-  setPos(newLat, newLon, knownAlt);
+  if (!setPos(newLat, newLon, knownAlt)) return false;
   map.setView([lat, lon], zoom || 15);
+  return true;
 }
 
 /* ---- Elevation (Open-Meteo): debounced + cached, WGS-84 native ---- */
 function elevKey(la, lo) { return la.toFixed(4) + ',' + lo.toFixed(4); }
 function fetchElevation(la, lo) {
+  if (deviceCoordinate(la, 90) === null || deviceCoordinate(lo, 180) === null) { setAltInput(null); return; }
   const key = elevKey(la, lo);
   if (elevCache.has(key)) { elev = elevCache.get(key); elevState = (elev === null ? 'fail' : 'ok'); setAltInput(elev); return; }
   elevState = 'loading'; elev = null;
@@ -570,7 +610,7 @@ function copyText(str) {
 }
 
 function copyField(which, btn) {
-  if (!selected) { toast(t('pick_first')); return; }
+  if (!validSelection()) return;
   let val;
   if (which === 'lat') val = lat.toFixed(6);
   else if (which === 'lon') val = lon.toFixed(6);
@@ -582,6 +622,7 @@ function copyField(which, btn) {
 }
 
 function moduleParamString() {
+  if (!validSelection()) return '';
   let s = 'latitude=' + lat.toFixed(6) + '&longitude=' + lon.toFixed(6);
   s += '&horizontalAccuracy=' + haccVal();
   const j = jitterVal(); if (j > 0) s += '&randomRadius=' + j;
@@ -589,7 +630,7 @@ function moduleParamString() {
 }
 
 function copyParams(btn) {
-  if (!selected) { toast(t('pick_first')); return; }
+  if (!validSelection()) return;
   const s = moduleParamString();
   copyText(s).then(() => {
     toast(t('copied', s));
@@ -599,7 +640,7 @@ function copyParams(btn) {
 
 /* ---- Favorites (localStorage) ---- */
 function getFavs() {
-  try { return JSON.parse(localStorage.getItem(FAV_KEY)) || []; } catch(e) { return []; }
+  try { const records = JSON.parse(localStorage.getItem(FAV_KEY)); return Array.isArray(records) ? records : []; } catch(e) { return []; }
 }
 function saveFavs(favs) {
   localStorage.setItem(FAV_KEY, JSON.stringify(favs));
@@ -614,13 +655,16 @@ function renderFavs() {
     el.innerHTML = '<div class="fav-empty">' + escHtml(t('fav_empty')) + '<\/div>';
     return;
   }
-  el.innerHTML = favs.map((f, i) => {
-    const isActive = activeStatus === 'ok' && activeLon !== null && Math.abs(f.lon - activeLon) < 0.000001 && Math.abs(f.lat - activeLat) < 0.000001;
+  el.innerHTML = favs.map((record, i) => {
+    const f = record && typeof record === 'object' ? record : {};
+    const la = deviceCoordinate(f.lat, 90), lo = deviceCoordinate(f.lon, 180);
+    const valid = la !== null && lo !== null;
+    const isActive = valid && activeStatus === 'ok' && activeLon !== null && Math.abs(lo - activeLon) < 0.000001 && Math.abs(la - activeLat) < 0.000001;
     const altStr = (typeof f.alt === 'number') ? ('  ·  ' + f.alt + ' m') : '';
     return '<div class="fav-item" onclick="loadFav(' + i + ')">' +
       '<div class="fav-info">' +
-        '<div class="fav-name">' + escHtml(f.name) + '<\/div>' +
-        '<div class="fav-coords">' + f.lon.toFixed(6) + ', ' + f.lat.toFixed(6) + altStr + '<\/div>' +
+        '<div class="fav-name">' + escHtml(f.name || t('invalid_favorite')) + '<\/div>' +
+        '<div class="fav-coords">' + (valid ? lo.toFixed(6) + ', ' + la.toFixed(6) + altStr : escHtml(t('invalid_favorite'))) + '<\/div>' +
         (isActive ? '<div class="fav-active">' + escHtml(t('active_now')) + '<\/div>' : '') +
       '<\/div>' +
       '<button class="fav-del" onclick="event.stopPropagation();delFav(' + i + ')" title="' + escHtml(t('del')) + '">\u00d7<\/button>' +
@@ -633,7 +677,7 @@ function escHtml(s) {
 }
 
 function addFav() {
-  if (!selected) { toast(t('pick_first')); return; }
+  if (!validSelection()) return;
   var _fa = currentAlt();
   document.getElementById('favModalCoords').textContent = lon.toFixed(6) + ', ' + lat.toFixed(6) + (_fa !== null ? ('  ·  ' + _fa + ' m') : '');
   document.getElementById('favNameInput').value = '';
@@ -646,6 +690,7 @@ function closeFavModal() {
 }
 
 function confirmFav() {
+  if (!validSelection()) return;
   const name = document.getElementById('favNameInput').value.trim();
   if (!name) { toast(t('enter_label')); return; }
   const favs = getFavs();
@@ -661,8 +706,8 @@ function confirmFav() {
 function loadFav(i) {
   const favs = getFavs();
   if (!favs[i]) return;
-  moveTo(favs[i].lat, favs[i].lon, 15, typeof favs[i].alt === 'number' ? favs[i].alt : undefined);
-  toast(favs[i].name + ' (' + favs[i].lon.toFixed(4) + ', ' + favs[i].lat.toFixed(4) + ')');
+  if (!moveTo(favs[i].lat, favs[i].lon, 15, typeof favs[i].alt === 'number' ? favs[i].alt : undefined)) return;
+  toast(favs[i].name + ' (' + lon.toFixed(4) + ', ' + lat.toFixed(4) + ')');
 }
 
 function delFav(i) {
@@ -823,6 +868,9 @@ async function save() {
     hacc: Number(document.getElementById('haccInput').value),
     radius: Number(document.getElementById('jitterInput').value)
   };
+  if (deviceCoordinate(snapshot.lat, 90) === null || deviceCoordinate(snapshot.lon, 180) === null) {
+    coordinateError(); return;
+  }
   if (!Number.isFinite(snapshot.hacc) || snapshot.hacc <= 0 || snapshot.hacc > Number.MAX_SAFE_INTEGER ||
       !Number.isFinite(snapshot.radius) || snapshot.radius < 0 || snapshot.radius > 10000) {
     toast(t('invalid_settings'), 5000); return;
@@ -837,9 +885,17 @@ async function save() {
       + '&hacc=' + encodeURIComponent(snapshot.hacc) + '&randomRadius=' + encodeURIComponent(snapshot.radius);
     const d = await deviceRequest(query);
     if (!showSettingsVersion(d)) throw new Error(t('version_old'));
-    if (!d.success || d.enabled !== true ||
+    if (!d.success) {
+      if (d.code === 'INVALID_COORDINATES') throw new Error(t('invalid_coordinates'));
+      if (d.code === 'INVALID_SETTINGS') throw new Error(t('invalid_settings'));
+      if (d.code === 'STORAGE_ERROR') {
+        throw new Error(t(d.enabled === false ? 'save_storage_disabled' : 'save_storage_unknown'));
+      }
+      throw new Error(t('save_failed'));
+    }
+    if (d.enabled !== true ||
         deviceCoordinate(d.longitude, 180) !== snapshot.lon || deviceCoordinate(d.latitude, 90) !== snapshot.lat) {
-      throw new Error(t('save_failed') + ' ' + t('clear_failed_cfg'));
+      throw new Error(t('save_unconfirmed'));
     }
     activeLon = snapshot.lon; activeLat = snapshot.lat; activeAcc = snapshot.hacc; activeAlt = null;
     activeStatus = 'ok';
@@ -859,7 +915,7 @@ function locateMe() {
   if (!navigator.geolocation) return toast(t('no_geo'));
   toast(t('getting_loc'));
   navigator.geolocation.getCurrentPosition(
-    pos => { moveTo(pos.coords.latitude, pos.coords.longitude, 16); toast(t('got_loc')); },
+    pos => { if (moveTo(pos.coords.latitude, pos.coords.longitude, 16)) toast(t('got_loc')); },
     err => toast(t('loc_failed', err.message), 3000),
     { enableHighAccuracy:true, timeout:10000 }
   );
@@ -867,12 +923,12 @@ function locateMe() {
 
 /* Local fallback for plain "lat, lon" text when the parse API is unreachable. */
 function parseLocalCoords(text) {
-  const m = text.match(/(-?[0-9]+\.[0-9]+)[,\s]+(-?[0-9]+\.[0-9]+)/);
+  const m = String(text).match(/^\s*([+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+))[,，\s]+([+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+))\s*$/);
   if (!m) return null;
   const a = parseFloat(m[1]), b = parseFloat(m[2]);
   if (Math.abs(a) <= 90 && Math.abs(b) <= 180) return { lat: a, lon: b };
   if (Math.abs(b) <= 90 && Math.abs(a) <= 180) return { lat: b, lon: a };
-  return { lat: a, lon: b };
+  return null;
 }
 
 async function parseUrl() {
@@ -883,14 +939,14 @@ async function parseUrl() {
     const r = await fetch(PARSE_API + '?format=json&u=' + encodeURIComponent(input), { cache:'no-store' });
     const d = await r.json();
     if (d && typeof d.lat === 'number' && typeof d.lon === 'number') {
-      moveTo(d.lat, d.lon, 15);
+      if (!moveTo(d.lat, d.lon, 15)) return;
       toast(d.name ? (d.name + ' (' + d.lon.toFixed(4) + ', ' + d.lat.toFixed(4) + ')') : t('parsed', d.lon, d.lat));
       return;
     }
     throw new Error(d && d.error ? d.error : 'parse failed');
   } catch(e) {
     const local = parseLocalCoords(input);
-    if (local) { moveTo(local.lat, local.lon, 15); toast(t('parsed', local.lon, local.lat)); return; }
+    if (local && moveTo(local.lat, local.lon, 15)) { toast(t('parsed', local.lon, local.lat)); return; }
     toast(t('parse_failed'), 3000);
   }
 }
@@ -917,8 +973,7 @@ async function searchPlace() {
 function selectSearchResult(i) {
   const p = searchResults[i];
   if (!p) return;
-  moveTo(parseFloat(p.lat), parseFloat(p.lon), 15);
-  toast((p.display_name || '').slice(0, 40));
+  if (moveTo(p.lat, p.lon, 15)) toast((p.display_name || '').slice(0, 40));
 }
 function restoreReal() { return disableDevice(); }
 

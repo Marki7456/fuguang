@@ -80,7 +80,7 @@ export default {
     const u=new URL(request.url);
     if(request.method==='OPTIONS')return new Response(null,{status:204,headers:{...HEADERS,'Access-Control-Allow-Methods':'GET, HEAD, OPTIONS'}});
     if(!['GET','HEAD'].includes(request.method))return json({error:'Method not allowed'},405);
-    if(u.pathname==='/health')return json({ok:true,version:'1.1.0',storage:'device-only'});
+    if(u.pathname==='/health')return json({ok:true,version:'1.1.1',storage:'device-only'});
     if(u.pathname==='/api/parse'){
       try{const input=u.searchParams.get('u')||'';if(input.length>8192)return json({error:'链接过长'},400);return json(await parseLink(input));}catch(e){return json({error:e.message},400);}
     }
