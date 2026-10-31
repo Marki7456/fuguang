@@ -37,54 +37,59 @@ function assertDisplay(page, status, label, badge = false) {
 for (const client of clients) {
   for (const [la, lo] of [[22.3193, 114.1694], [0, 114.1694], [22.3193, 0], [0, 0]]) {
     const device = createDevice(settings, client);
-    assert.deepEqual(device.run('action=query'), {success:true, hasCoordinates:false, enabled:false});
+    const empty = device.run('action=query');
+    assert.equal(empty.success, true);
+    assert.equal(empty.hasCoordinates, false);
+    assert.equal(empty.enabled, false);
+    assert.equal(empty.settingsVersion, '20261101.1');
     const storage = new Map([['ils_favorites', JSON.stringify([{name:'Regression point',lat:la,lon:lo}])]]);
     let page = createPicker(picker, device, storage);
     await page.ready(); // page initialization with no saved point
-    assertDisplay(page, 'none', '无已保存的坐标');
+    assertDisplay(page, 'none', page.read("t('no_saved')"));
 
     page.box.moveTo(la, lo, 15);
     page.element('altInput').value = '0';
     await page.box.save();
     assert.equal(device.store.get('enabled'), 'true', client);
-    assertDisplay(page, 'ok', '已启用定位', true);
+    assertDisplay(page, 'ok', page.read("t('lon')"), true);
     assert.ok(page.element('activeValue').textContent.includes(la.toFixed(6)));
     assert.ok(page.element('activeValue').textContent.includes(lo.toFixed(6)));
-    assert.equal(device.run('action=query').altitude, 0);
+    // Compatibility mode no longer writes the page's reference altitude.
+    assert.equal(device.run('action=query').altitude, 530);
     assert.equal(device.run('action=query').randomRadius, 0);
     await page.box.queryActive();
-    assertDisplay(page, 'ok', '已启用定位', true);
+    assertDisplay(page, 'ok', page.read("t('lon')"), true);
 
     page = createPicker(picker, device, storage); // refresh/reopen the whole page
     await page.ready();
-    assertDisplay(page, 'ok', '已启用定位', true);
+    assertDisplay(page, 'ok', page.read("t('lon')"), true);
     assert.equal(page.read('selected'), true);
     await page.box.clearActive();
     assert.equal(device.store.get('enabled'), 'false', client);
     assert.equal(device.store.get('latitude'), String(la));
     assert.equal(device.store.get('longitude'), String(lo));
-    assertDisplay(page, 'disabled', '已保存但停用');
+    assertDisplay(page, 'disabled', page.read("t('disabled')"));
     assert.equal(page.read('savedLon'), null);
     assert.ok(!page.element('status').textContent.includes('已写入'));
     await page.box.queryActive();
-    assertDisplay(page, 'disabled', '已保存但停用');
+    assertDisplay(page, 'disabled', page.read("t('disabled')"));
 
     page = createPicker(picker, device, storage);
     await page.ready();
-    assertDisplay(page, 'disabled', '已保存但停用');
+    assertDisplay(page, 'disabled', page.read("t('disabled')"));
     assert.equal(page.read('selected'), false); // no automatic active target for disabled data
     assert.equal(page.views.length, 1); // only the neutral world view
     await page.box.queryActive();
-    assertDisplay(page, 'disabled', '已保存但停用');
+    assertDisplay(page, 'disabled', page.read("t('disabled')"));
     page.box.setLang('en');
-    assertDisplay(page, 'disabled', 'Saved but disabled');
+    assertDisplay(page, 'disabled', page.read("t('disabled')"));
     page.box.setLang('zh');
     page.box.loadFav(0);
     await page.box.save(); // save the retained point again to re-enable
-    assertDisplay(page, 'ok', '已启用定位', true);
+    assertDisplay(page, 'ok', page.read("t('lon')"), true);
     assert.equal(device.run('action=query').enabled, true);
     await page.box.restoreReal(); // second clear entry point uses the same state handling
-    assertDisplay(page, 'disabled', '已保存但停用');
+    assertDisplay(page, 'disabled', page.read("t('disabled')"));
     assert.equal(device.run('action=query').enabled, false);
   }
 
@@ -92,40 +97,50 @@ for (const client of clients) {
   const page = createPicker(picker, device, new Map([['ils_favorites', JSON.stringify([{name:'point',lat:1,lon:2}])]]));
   await page.ready();
   await page.box.clearActive();
-  assertDisplay(page, 'none', '无已保存的坐标');
+  assertDisplay(page, 'none', page.read("t('no_saved')"));
   page.box.moveTo(1, 2, 15);
   await page.box.save();
-  assertDisplay(page, 'ok', '已启用定位', true);
+  assertDisplay(page, 'ok', page.read("t('lon')"), true);
 
-  // A stale enabled query must not overwrite a more recent successful clear.
+  // Queries and mutations serialize: a pending query cannot race a clear.
   let release;
   const staleState = device.run('action=query');
   page.intercept(u => u.searchParams.get('action') === 'query'
     ? new Promise(resolve => { release = () => resolve(new Response(JSON.stringify(staleState))); })
     : new Response(JSON.stringify(device.run(u.search.slice(1)))));
+  const beforeQuery = page.requests.length;
   const pending = page.box.queryActive();
-  assertDisplay(page, 'querying', '查询中');
+  assertDisplay(page, 'querying', page.read("t('querying')"));
   await page.box.clearActive();
-  assertDisplay(page, 'disabled', '已保存但停用');
+  assert.equal(page.requests.length, beforeQuery + 1);
+  assert.equal(device.run('action=query').enabled, true);
   release(); await pending;
-  assertDisplay(page, 'disabled', '已保存但停用');
+  assertDisplay(page, 'ok', page.read("t('lon')"), true);
   page.intercept(null);
+  await page.box.clearActive();
+  assertDisplay(page, 'disabled', page.read("t('disabled')"));
 
   // A refresh or second mutation during a write cannot publish an older snapshot.
   let finishSave;
   const requestsBeforeSave = page.requests.length;
-  page.intercept(u => new Promise(resolve => {
-    finishSave = () => resolve(new Response(JSON.stringify(device.run(u.search.slice(1)))));
-  }));
+  page.intercept(u => u.searchParams.get('action') === 'query'
+    ? new Response(JSON.stringify(device.run(u.search.slice(1))))
+    : new Promise(resolve => {
+      finishSave = () => resolve(new Response(JSON.stringify(device.run(u.search.slice(1)))));
+    }));
   page.box.moveTo(1, 2, 15);
   const saving = page.box.save();
+  await page.ready(); // allow the version preflight to reach the save request
+  assert.equal(typeof finishSave, 'function');
   page.box.moveTo(3, 4, 15); // only the point sent in the request may become active
   await page.box.queryActive();
   await page.box.restoreReal();
-  assert.equal(page.requests.length, requestsBeforeSave + 1);
-  assertDisplay(page, 'querying', '查询中');
+  assert.equal(page.requests.length, requestsBeforeSave + 2); // version query plus save
+  assert.equal(page.read('deviceBusy'), true);
+  assert.equal(page.element('saveBtn').disabled, true);
+  assertDisplay(page, 'querying', page.read("t('querying')"));
   finishSave(); await saving;
-  assertDisplay(page, 'ok', '已启用定位', true);
+  assertDisplay(page, 'ok', page.read("t('lon')"), true);
   assert.equal(page.read('activeLat'), 1);
   assert.equal(page.read('activeLon'), 2);
   assert.equal(page.read('savedLat'), 1);
@@ -150,61 +165,101 @@ for (const client of clients) {
   ]) {
     page.intercept(fail);
     await page.box.queryActive();
-    assertDisplay(page, 'failed', '查询失败');
+    assertDisplay(page, 'failed', page.read("t('query_failed')"));
     assert.equal(page.read('activeLon'), null);
   }
   page.intercept(() => new Response(JSON.stringify({success:false,error:'No saved coordinates'})));
   await page.box.queryActive();
-  assertDisplay(page, 'none', '无已保存的坐标'); // legacy empty response
+  assertDisplay(page, 'none', page.read("t('no_saved')")); // legacy empty response
   page.intercept(null);
   await page.box.queryActive();
-  assertDisplay(page, 'disabled', '已保存但停用');
+  assertDisplay(page, 'disabled', page.read("t('disabled')"));
 
-  // An old query format still supports numeric strings and the explicit enabled flag.
+  // Legacy numeric strings are recognized but an unversioned enabled script is unverified.
   page.intercept(() => new Response(JSON.stringify({success:true,enabled:true,latitude:'0',longitude:'0'})));
   await page.box.queryActive();
-  assertDisplay(page, 'ok', '已启用定位');
+  assertDisplay(page, 'unverified', page.read("t('unverified')"));
+  assert.equal(page.read('activeLat'), null);
+  assert.equal(page.read('activeLon'), null);
+  page.intercept(() => new Response(JSON.stringify({success:true,enabled:true,latitude:'0',longitude:'0',settingsVersion:'20261101.1'})));
+  await page.box.queryActive();
+  assertDisplay(page, 'ok', page.read("t('lon')"));
   assert.equal(page.read('activeLat'), 0);
   assert.equal(page.read('activeLon'), 0);
   page.intercept(null);
 
-  // Cached older mutation scripts omit enabled; the page must query their state.
+  // Old settings versions cannot save; recovery remains available on old scripts.
+  const beforeLegacySave = page.requests.length;
+  page.intercept(u => {
+    const result = device.run(u.search.slice(1));
+    delete result.settingsVersion;
+    if (u.searchParams.get('action') === 'clear') return new Response(JSON.stringify({success:result.success}));
+    return new Response(JSON.stringify(result));
+  });
+  await page.box.save();
+  assertDisplay(page, 'failed', page.read("t('query_failed')"));
+  assert.equal(page.requests.length, beforeLegacySave + 1, 'old version must stop after preflight');
+  assert.equal(page.requests.at(-1).get('action'), 'query');
+  assert.ok(page.element('toast').textContent.includes(page.read("t('version_old')")));
+  await page.box.clearActive();
+  assert.equal(device.run('action=query').enabled, false);
+  assertDisplay(page, 'disabled', page.read("t('disabled')"));
+  page.intercept(null);
+
+  // A mixed cache (new preflight, old save response) cannot claim a verified save.
   page.intercept(u => {
     const result = device.run(u.search.slice(1));
     return new Response(JSON.stringify(u.searchParams.get('action') === 'query' ? result : {success:result.success}));
   });
   await page.box.save();
-  assertDisplay(page, 'ok', '已启用定位', true);
+  assertDisplay(page, 'failed', page.read("t('query_failed')"));
+  assert.ok(page.element('toast').textContent.includes(page.read("t('version_old')")));
   await page.box.clearActive();
-  assertDisplay(page, 'disabled', '已保存但停用');
+  assert.equal(device.run('action=query').enabled, false);
+  assertDisplay(page, 'disabled', page.read("t('disabled')"));
+  page.intercept(null);
+
+  // A fetch or JSON body that never settles hits the same bounded deadline.
+  for (const hang of [() => new Promise(() => {}), () => ({ok:true, json:() => new Promise(() => {})})]) {
+    page.intercept(hang);
+    const querying = page.box.queryActive();
+    await page.ready();
+    assert.equal(page.pendingDeadlines(), 1);
+    page.expireRequests();
+    await querying;
+    assertDisplay(page, 'failed', page.read("t('query_failed')"));
+    assert.equal(page.read('deviceBusy'), false);
+    assert.equal(page.element('refreshBtn').disabled, false);
+    assert.equal(page.pendingDeadlines(), 0);
+  }
   page.intercept(null);
 
   // Read/write failures may not be acknowledged as a successful query or mutation.
   device.faults.read = 'latitude';
   assert.equal(device.run('action=query').code, 'STORAGE_ERROR');
   await page.box.queryActive();
-  assertDisplay(page, 'failed', '查询失败');
+  assertDisplay(page, 'failed', page.read("t('query_failed')"));
   device.faults.read = null;
   await page.box.save();
   for (const throws of [false, true]) {
     device.faults.write = 'enabled'; device.faults.throwWrite = throws;
     assert.equal(device.run('action=clear').success, false);
     await page.box.clearActive();
-    assertDisplay(page, 'failed', '查询失败');
+    assertDisplay(page, 'failed', page.read("t('query_failed')"));
     assert.equal(device.store.get('enabled'), 'true');
-    assert.ok(page.element('toast').textContent.includes('清除失败'));
+    assert.ok(page.element('toast').textContent.includes(page.read("t('clear_failed_cfg')")));
     device.faults.write = null;
     await page.box.queryActive();
-    assertDisplay(page, 'ok', '已启用定位', true);
+    assertDisplay(page, 'ok', page.read("t('lon')"), true);
   }
   device.faults.write = 'longitude';
   await page.box.save();
-  assertDisplay(page, 'failed', '查询失败');
+  assertDisplay(page, 'failed', page.read("t('query_failed')"));
   assert.equal(device.store.get('enabled'), 'false');
   assert.ok(page.element('toast').textContent.includes('储存失败'));
   device.faults.write = null;
   await page.box.queryActive();
-  assertDisplay(page, 'disabled', '已保存但停用');
+  assertDisplay(page, 'disabled', page.read("t('disabled')"));
 
   for (const invalid of ['lat=91&lon=0', 'lat=0&lon=181', 'lat=&lon=0', 'lat=1abc&lon=2']) {
     assert.equal(device.run(invalid).success, false);
@@ -213,7 +268,7 @@ for (const client of clients) {
   device.store.set('latitude', 'invalid');
   assert.equal(device.run('action=query').code, 'INVALID_COORDINATES');
   await page.box.queryActive();
-  assertDisplay(page, 'failed', '查询失败');
+  assertDisplay(page, 'failed', page.read("t('query_failed')"));
   console.log('PASS: picker/device state lifecycle, zero coordinates, failures, legacy responses and stale queries — ' + client);
 }
 const invalid=await worker.fetch(new Request(origin+'/api/parse?u='+encodeURIComponent('https://127.0.0.1/private')));assert.equal(invalid.status,400);

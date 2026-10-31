@@ -3,8 +3,8 @@
  * 再按 Apple 的格式封回去返回给系统。
  *
  * 主要流程：
- *   ARPC 拆包 → protobuf 解字段 → 替换 Location 子消息的坐标/精度/运动状态
- *   → protobuf 重新打包 → 按原格式（ARPC / marker / synthetic）封回
+ *   ARPC 拆包 → protobuf 解字段 → 仅替换已有 Location 坐标/精度
+ *   → 保留其余原始字段 → 按原格式（ARPC / marker / synthetic / bare）封回
  */
 (function () {
   "use strict";
@@ -43,18 +43,7 @@
   // Stable marker that precedes the AppleWLoc protobuf inside a REAL Apple /clls/wloc
   // response. After the marker come 2 bytes (uint16 BE payload length) then the payload.
   var APPLE_WLOC_MARKER = bytesFromArray([0x00, 0x00, 0x00, 0x01, 0x00, 0x00]);
-  var ROOT_DROP_FIELDS = { 3: true, 4: true, 33: true };
   var CELL_RESPONSE_FIELDS = { 22: true, 24: true };
-  var LOCATION_REPLACED_FIELDS = {
-    1: true,
-    2: true,
-    3: true,
-    4: true,
-    5: true,
-    6: true,
-    11: true,
-    12: true
-  };
 
   function bytesFromArray(values) {
     return new Uint8Array(values);
@@ -277,14 +266,16 @@
     while (current < bytes.length) {
       var b = bytes[current];
       current += 1;
+      // A uint64 varint has at most ten bytes; only bit 0 may be set in
+      // the tenth. Reject overflow before asIntN could silently wrap it.
+      if (current - offset === 10 && b > 1) {
+        throw new Error("varint exceeds uint64");
+      }
       result |= BigInt(b & 0x7f) << shift;
       if ((b & 0x80) === 0) {
         return { value: result, offset: current };
       }
       shift += 7n;
-      if (shift > 70n) {
-        throw new Error("varint too long");
-      }
     }
 
     throw new Error("unterminated varint");
@@ -459,7 +450,12 @@
     cfg.mode = mode === "request" || mode === "prepare" || mode === "probe" || mode === "inspect" ? mode : "response";
     cfg.latitude = Number(cfg.latitude);
     cfg.longitude = Number(cfg.longitude);
-    cfg.horizontalAccuracy = Math.trunc(Number(cfg.horizontalAccuracy));
+    // The wire field is an integer number of metres. Positive sub-metre settings
+    // must not become a zero accuracy after conversion.
+    cfg.horizontalAccuracy = Math.ceil(Number(cfg.horizontalAccuracy));
+    if (!Number.isSafeInteger(cfg.horizontalAccuracy) || cfg.horizontalAccuracy <= 0) {
+      cfg.horizontalAccuracy = DEFAULT_CONFIG.horizontalAccuracy;
+    }
     cfg.verticalAccuracy = Math.trunc(Number(cfg.verticalAccuracy));
     cfg.altitude = Math.trunc(Number(cfg.altitude));
     cfg.unknownValue4 = Math.trunc(Number(cfg.unknownValue4));
@@ -529,67 +525,90 @@
   }
 
   function patchLocation(locationPayload, config) {
-    var parts = [];
     var fields = locationPayload.length ? parseFields(locationPayload) : [];
+    var hasLatitude = false;
+    var hasLongitude = false;
     for (var i = 0; i < fields.length; i += 1) {
-      if (!LOCATION_REPLACED_FIELDS[fields[i].fieldNumber]) {
-        parts.push(fields[i].raw);
+      if (fields[i].fieldNumber === 1 && fields[i].wireType === 0) {
+        var latitude = signedVarintFieldValue(fields[i]);
+        if (latitude < -9000000000n || latitude > 9000000000n) {
+          return locationPayload;
+        }
+        hasLatitude = true;
+      }
+      if (fields[i].fieldNumber === 2 && fields[i].wireType === 0) {
+        var longitude = signedVarintFieldValue(fields[i]);
+        if (longitude < -18000000000n || longitude > 18000000000n) {
+          return locationPayload;
+        }
+        hasLongitude = true;
       }
     }
+    // Missing coordinates can denote another message shape or an unavailable
+    // location. Never manufacture one or change its other metadata.
+    if (!hasLatitude || !hasLongitude) {
+      return locationPayload;
+    }
 
-    parts.push(makeVarintField(1, coordToInt(config.latitude)));
-    parts.push(makeVarintField(2, coordToInt(config.longitude)));
-    parts.push(makeVarintField(3, config.horizontalAccuracy));
-    parts.push(makeVarintField(4, config.unknownValue4));
-    parts.push(makeVarintField(5, config.altitude));
-    parts.push(makeVarintField(6, config.verticalAccuracy));
-    parts.push(makeVarintField(11, config.motionActivityType));
-    parts.push(makeVarintField(12, config.motionActivityConfidence));
+    var parts = [];
+    for (i = 0; i < fields.length; i += 1) {
+      var field = fields[i];
+      var replacement = null;
+      if (field.wireType === 0) {
+        if (field.fieldNumber === 1) replacement = BigInt(coordToInt(config.latitude));
+        if (field.fieldNumber === 2) replacement = BigInt(coordToInt(config.longitude));
+        if (field.fieldNumber === 3) replacement = BigInt(config.horizontalAccuracy);
+      }
+      if (replacement !== null && signedVarintFieldValue(field) !== replacement) {
+        parts.push(concatBytes([
+          field.raw.slice(0, field.valueStart - field.keyStart),
+          encodeVarintSignedInt64(replacement)
+        ]));
+      } else {
+        parts.push(field.raw);
+      }
+    }
+    return concatBytes(parts);
+  }
+
+  function bytesEqual(left, right) {
+    if (left.length !== right.length) return false;
+    for (var i = 0; i < left.length; i += 1) {
+      if (left[i] !== right[i]) return false;
+    }
+    return true;
+  }
+
+  function replaceFieldPayload(field, payload) {
+    if (bytesEqual(field.valueBytes, payload)) return field.raw;
+    var prefix = field.raw.slice(0, field.valueStart - field.keyStart);
+    if (field.valueBytes.length !== payload.length) {
+      var keyEnd = decodeVarint(field.raw, 0).offset;
+      prefix = concatBytes([field.raw.slice(0, keyEnd), encodeVarintUnsigned(payload.length)]);
+    }
+    return concatBytes([prefix, payload]);
+  }
+
+  function patchRecordLocation(recordPayload, locationFieldNumber, config) {
+    var fields = parseFields(recordPayload);
+    var parts = [];
+    for (var i = 0; i < fields.length; i += 1) {
+      var field = fields[i];
+      if (field.fieldNumber === locationFieldNumber && field.wireType === 2) {
+        parts.push(replaceFieldPayload(field, patchLocation(field.valueBytes, config)));
+      } else {
+        parts.push(field.raw);
+      }
+    }
     return concatBytes(parts);
   }
 
   function patchWifiDevice(wifiPayload, config) {
-    var fields = parseFields(wifiPayload);
-    var parts = [];
-    var patchedLocation = false;
-
-    for (var i = 0; i < fields.length; i += 1) {
-      var field = fields[i];
-      if (field.fieldNumber === 2 && field.wireType === 2) {
-        parts.push(makeLengthDelimitedField(2, patchLocation(field.valueBytes, config)));
-        patchedLocation = true;
-      } else {
-        parts.push(field.raw);
-      }
-    }
-
-    if (!patchedLocation) {
-      parts.push(makeLengthDelimitedField(2, patchLocation(bytesFromArray([]), config)));
-    }
-
-    return concatBytes(parts);
+    return patchRecordLocation(wifiPayload, 2, config);
   }
 
   function patchCellTower(cellPayload, config) {
-    var fields = parseFields(cellPayload);
-    var parts = [];
-    var patchedLocation = false;
-
-    for (var i = 0; i < fields.length; i += 1) {
-      var field = fields[i];
-      if (field.fieldNumber === 5 && field.wireType === 2) {
-        parts.push(makeLengthDelimitedField(5, patchLocation(field.valueBytes, config)));
-        patchedLocation = true;
-      } else {
-        parts.push(field.raw);
-      }
-    }
-
-    if (!patchedLocation) {
-      parts.push(makeLengthDelimitedField(5, patchLocation(bytesFromArray([]), config)));
-    }
-
-    return concatBytes(parts);
+    return patchRecordLocation(cellPayload, 5, config);
   }
 
   function patchAppleWLocPayload(payload, config) {
@@ -601,17 +620,25 @@
     for (var i = 0; i < fields.length; i += 1) {
       var field = fields[i];
       if (field.fieldNumber === 2 && field.wireType === 2) {
-        parts.push(makeLengthDelimitedField(2, patchWifiDevice(field.valueBytes, config)));
-        wifiCount += 1;
+        var wifi = patchWifiDevice(field.valueBytes, config);
+        parts.push(replaceFieldPayload(field, wifi));
+        if (!bytesEqual(wifi, field.valueBytes)) wifiCount += 1;
       } else if (isCellResponseField(field.fieldNumber) && field.wireType === 2) {
-        parts.push(makeLengthDelimitedField(field.fieldNumber, patchCellTower(field.valueBytes, config)));
-        cellCount += 1;
-      } else if (!ROOT_DROP_FIELDS[field.fieldNumber]) {
+        var cell = patchCellTower(field.valueBytes, config);
+        parts.push(replaceFieldPayload(field, cell));
+        if (!bytesEqual(cell, field.valueBytes)) cellCount += 1;
+      } else {
         parts.push(field.raw);
       }
     }
 
-    return { payload: concatBytes(parts), wifiCount: wifiCount, cellCount: cellCount };
+    var patchedPayload = concatBytes(parts);
+    return {
+      payload: patchedPayload,
+      wifiCount: wifiCount,
+      cellCount: cellCount,
+      changed: !bytesEqual(payload, patchedPayload)
+    };
   }
 
   function readPascalString(bytes, state) {
@@ -643,6 +670,7 @@
     var osVersion = readPascalString(bytes, state);
     var functionId = readUInt32BE(bytes, state.offset);
     state.offset += 4;
+    var lengthOffset = state.offset;
     var payloadLength = readUInt32BE(bytes, state.offset);
     state.offset += 4;
 
@@ -656,11 +684,21 @@
       appIdentifier: appIdentifier,
       osVersion: osVersion,
       functionId: functionId,
-      payload: bytes.slice(state.offset, state.offset + payloadLength)
+      payload: bytes.slice(state.offset, state.offset + payloadLength),
+      prefix: bytes.slice(0, lengthOffset),
+      suffix: bytes.slice(state.offset + payloadLength)
     };
   }
 
   function serializeArpc(arpc) {
+    if (arpc.prefix) {
+      return concatBytes([
+        arpc.prefix,
+        writeUInt32BE(arpc.payload.length),
+        arpc.payload,
+        arpc.suffix || bytesFromArray([])
+      ]);
+    }
     return concatBytes([
       writeUInt16BE(arpc.version),
       writePascalString(arpc.locale),
@@ -668,7 +706,8 @@
       writePascalString(arpc.osVersion),
       writeUInt32BE(arpc.functionId),
       writeUInt32BE(arpc.payload.length),
-      arpc.payload
+      arpc.payload,
+      arpc.suffix || bytesFromArray([])
     ]);
   }
 
@@ -804,13 +843,14 @@
     };
   }
 
-  function spoofAppleResponse(responseBytes, configInput) {
-    var config = normalizeConfig(configInput);
+  function rewriteAppleResponse(responseBytes, config) {
     var extraction = extractAppleWLocPayload(responseBytes);
     var patched = patchAppleWLocPayload(extraction.payload, config);
     var response;
 
-    if (extraction.kind === "arpc") {
+    if (!patched.changed) {
+      response = responseBytes;
+    } else if (extraction.kind === "arpc") {
       // Write back in ARPC format, preserving the original envelope metadata.
       var arpcOut = {
         version: extraction.arpc.version,
@@ -818,6 +858,8 @@
         appIdentifier: extraction.arpc.appIdentifier,
         osVersion: extraction.arpc.osVersion,
         functionId: extraction.arpc.functionId,
+        prefix: extraction.arpc.prefix,
+        suffix: extraction.arpc.suffix,
         payload: patched.payload
       };
       response = serializeArpc(arpcOut);
@@ -831,9 +873,15 @@
         patched.payload,
         extraction.suffix
       ]);
+    } else if (extraction.kind === "synthetic") {
+      response = concatBytes([
+        buildAppleWLocResponse(patched.payload, extraction.prefix),
+        extraction.suffix
+      ]);
+    } else if (extraction.kind === "bare") {
+      response = patched.payload;
     } else {
-      // synthetic / bare – use the simple prefix format.
-      response = buildAppleWLocResponse(patched.payload, extraction.prefix);
+      throw new Error("unsupported Apple WLoc envelope");
     }
 
     return {
@@ -841,9 +889,14 @@
       payload: patched.payload,
       wifiCount: patched.wifiCount,
       cellCount: patched.cellCount,
+      changed: patched.changed,
       kind: extraction.kind,
       prefix: extraction.prefix ? hexPreview(extraction.prefix, 8) : ""
     };
+  }
+
+  function spoofAppleResponse(responseBytes, configInput) {
+    return rewriteAppleResponse(responseBytes, normalizeConfig(configInput));
   }
 
   function parseArgumentString(argument) {
@@ -1360,24 +1413,34 @@
   }
 
   function loadRuntimeConfig(callback) {
-    var loaded = loadRuntimeConfigSync();
+    var loaded;
+    try {
+      loaded = loadRuntimeConfigSync();
+    } catch (err) {
+      donePassThrough();
+      return;
+    }
     var cfg = loaded.cfg;
     var configUrl = loaded.configUrl;
     var debug = loaded.debug;
+    var finished = false;
 
     function finish() {
+      if (finished) return;
+      finished = true;
+      var normalized;
       try {
-        callback(normalizeConfig(cfg));
+        normalized = normalizeConfig(cfg);
       } catch (err) {
         if (debug) {
           console.log("Location spoofer config invalid: " + err.message + " | cfg lat/lng=" + cfg.latitude + "," + cfg.longitude);
         }
-        if (!Number.isFinite(Number(cfg.latitude)) || !Number.isFinite(Number(cfg.longitude))) {
-          cfg.latitude = DEFAULT_CONFIG.latitude;
-          cfg.longitude = DEFAULT_CONFIG.longitude;
-        }
-        callback(normalizeConfig(cfg));
+        // Legacy device storage may contain finite but out-of-range coordinates.
+        // Keep the real response instead of retrying or choosing a default point.
+        donePassThrough();
+        return;
       }
+      callback(normalized);
     }
 
     logScriptArguments(debug);
@@ -1466,7 +1529,7 @@
     for (key in sourceHeaders) {
       if (Object.prototype.hasOwnProperty.call(sourceHeaders, key)) {
         var lower = key.toLowerCase();
-        if (lower !== "content-length" && lower !== "content-encoding" && lower !== "transfer-encoding") {
+        if (lower !== "content-type" && lower !== "content-length" && lower !== "content-encoding" && lower !== "transfer-encoding") {
           headers[key] = sourceHeaders[key];
         }
       }
@@ -1501,71 +1564,59 @@
     });
   }
 
-  // Decode an HTTP response body that may be gzip/deflate/br encoded.
-  // Shadowrocket/Surge expose $utils.ungzip; Loon falls back to DecompressionStream.
+  // Unsupported encodings or failed decoding must leave the original response
+  // untouched. Never feed compressed bytes into the protobuf rewrite.
   function decompressBody(body, contentEncoding) {
     if (body == null) {
       return body;
     }
-    var enc = contentEncoding ? String(contentEncoding).toLowerCase() : "";
+    var enc = contentEncoding ? String(contentEncoding).trim().toLowerCase() : "";
     if (enc === "identity" || enc === "") {
       return body;
     }
-    try {
-      if (enc.indexOf("gzip") >= 0 && typeof $utils !== "undefined" && $utils.ungzip) {
-        return $utils.ungzip(body);
-      }
-      if (enc.indexOf("deflate") >= 0 && typeof $utils !== "undefined" && $utils.inflate) {
-        return $utils.inflate(body);
-      }
-      if (enc.indexOf("br") >= 0 && typeof $utils !== "undefined" && $utils.brotliDecompress) {
-        return $utils.brotliDecompress(body);
-      }
-    } catch (err) {
-      if (typeof console !== "undefined") {
-        console.log("Location spoofer decompress failed (" + enc + "): " + err.message);
-      }
+    if (enc === "gzip" && typeof $utils !== "undefined" && $utils.ungzip) {
+      return $utils.ungzip(body);
     }
-    return body;
+    if (enc === "deflate" && typeof $utils !== "undefined" && $utils.inflate) {
+      return $utils.inflate(body);
+    }
+    if (enc === "br" && typeof $utils !== "undefined" && $utils.brotliDecompress) {
+      return $utils.brotliDecompress(body);
+    }
+    throw new Error("response decompression unavailable: " + enc);
   }
 
   function prepareResponseBodySync(config) {
     var respHeaders = ($response && $response.headers) || {};
-    var contentEncoding = headerValue(respHeaders, "Content-Encoding");
-    var rawRespBody = $response && ($response.body != null ? $response.body : $response.bodyBytes);
+    var contentEncoding = String(headerValue(respHeaders, "Content-Encoding") || "").trim().toLowerCase();
+    // Read the same binary slot once for decoding and rewriting. Some runtimes
+    // expose both body and bodyBytes, with only the latter containing the wire bytes.
+    var bytes = messageBodyToBytes($response);
     logHttpDump("response-wire-original", $response, config);
-    logRawDump("response-wire-original", bodyToBytes(rawRespBody), config);
+    logRawDump("response-wire-original", bytes, config);
 
-    var bytes = bodyToBytes(rawRespBody);
     if (!bytes || bytes.length < 2) {
-      return;
+      return bytes;
     }
 
-    if (isGzipBytes(bytes) || (contentEncoding && String(contentEncoding).toLowerCase().indexOf("gzip") >= 0)) {
-      var decoded = bodyToBytes(decompressBody(rawRespBody, contentEncoding || "gzip"));
-      if (decoded && decoded.length > 2 && !isGzipBytes(decoded)) {
-        $response.body = decoded;
-        if (config.debug) {
-          console.log("Location spoofer decompressed body: " + bytes.length + " -> " + decoded.length + " bytes");
-        }
-        return;
+    if (isGzipBytes(bytes)) {
+      contentEncoding = "gzip";
+    } else if (contentEncoding === "gzip") {
+      // A client may have already decoded gzip while retaining the HTTP header.
+      // The structured parser below still has to validate these bytes.
+      return bytes;
+    }
+    if (contentEncoding && contentEncoding !== "identity") {
+      var decoded = bodyToBytes(decompressBody(bytes.slice(), contentEncoding));
+      if (!decoded || decoded.length < 2 || isGzipBytes(decoded)) {
+        throw new Error("invalid decompressed response");
       }
       if (config.debug) {
-        console.log(
-          "Location spoofer gzip body still compressed (len=" +
-            bytes.length +
-            "); ensure http-request prepare script is enabled"
-        );
+        console.log("Location spoofer decompressed body: " + bytes.length + " -> " + decoded.length + " bytes");
       }
-      return;
+      return decoded;
     }
-
-    if (contentEncoding) {
-      var plain = bodyToBytes(decompressBody(rawRespBody, contentEncoding));
-      if (plain) {
-        $response.body = plain;
-      }
-    }
+    return bytes;
   }
 
   function headerValue(headers, name) {
@@ -1836,8 +1887,7 @@
     });
   }
 
-  function continueResponseRewrite(config) {
-    var responseBody = messageBodyToBytes($response);
+  function continueResponseRewrite(config, responseBody) {
     if (!responseBody || responseBody.length < 2) {
       if (config.debug) {
         console.log(
@@ -1858,7 +1908,12 @@
     }
     logHttpDump("response-original", $response, config);
     logRawDump("response-original", responseBody, config);
-    var responseResult = spoofAppleResponse(responseBody, config);
+    // Runtime configuration was already normalized, including one random offset.
+    var responseResult = rewriteAppleResponse(responseBody, config);
+    if (!responseResult.changed) {
+      donePassThrough();
+      return;
+    }
     if (config.debug) {
       console.log(
         "Location spoofer patched " +
@@ -1886,7 +1941,15 @@
   }
 
   function prepareResponseBody(config) {
-    prepareResponseBodySync(config);
+    return prepareResponseBodySync(config);
+  }
+
+  function isSuccessfulResponse(response) {
+    var status = response.statusCode != null ? response.statusCode : response.status;
+    // Shadowrocket versions which omit status can still expose a valid body.
+    if (status == null || status === "") return true;
+    var match = String(status).match(/^(?:HTTP\/\S+\s+)?(\d{3})(?:\s|$)/i);
+    return !!match && Number(match[1]) >= 200 && Number(match[1]) < 300;
   }
 
   function runShadowrocket() {
@@ -1920,6 +1983,10 @@
         }
 
         if (hasResponse) {
+          if (!isSuccessfulResponse($response)) {
+            donePassThrough();
+            return;
+          }
           if (config.debug) {
             console.log(
               "Location spoofer intercept -> lat=" +
@@ -1938,8 +2005,7 @@
             donePassThrough();
             return;
           }
-          prepareResponseBody(config);
-          continueResponseRewrite(config);
+          continueResponseRewrite(config, prepareResponseBody(config));
           return;
         }
 
@@ -1983,7 +2049,7 @@
           var diagBody = hasResponse ? messageBodyToBytes($response) : messageBodyToBytes($request);
           console.log("Location spoofer failed: " + err.message + " | bodyLen=" + (diagBody ? diagBody.length : 0) + " head=" + (diagBody ? hexPreview(diagBody, 32) : "<none>"));
         }
-        if (config.failOpen !== false) {
+        if (hasResponse || config.failOpen !== false) {
           donePassThrough();
           return;
         }

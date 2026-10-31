@@ -68,6 +68,10 @@ h2::before{ content:""; width:4px; height:16px; border-radius:2px; background:li
 .sub{ font-size:12.5px; color:var(--muted); margin:0 0 14px 13px; }
 .note{ background:var(--card); border:1px solid var(--line); border-left:4px solid var(--cyan); border-radius:11px; padding:12px 14px; font-size:12.5px; color:#c3ccdb; margin-bottom:16px; }
 .note b{ color:var(--txt); }
+.repair{ margin-top:20px; font-size:13px; line-height:1.8; }
+.repair ol{ padding-left:20px; margin:8px 0; }
+.repair .big{ margin:12px 0 7px; }
+.repair a.manual{ color:var(--mono); }
 
 /* --- platform cards --- */
 .plat{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px; margin-bottom:12px; }
@@ -99,7 +103,7 @@ footer b{ color:#8fe0e6; }
 </style>
 </head>
 <body>
-<div style="position:relative;z-index:10001;text-align:center;padding:12px 16px;background:#17313a;border-bottom:1px solid #2f6974;color:#d8f8ff;font:13px/1.6 -apple-system,system-ui,sans-serif">我的独立副本 · 2026-10-28 快照 · <a href="/source.zip" style="color:#7fe3ea">下载完整源码</a> · 保留原作者署名</div>
+<div style="position:relative;z-index:10001;text-align:center;padding:12px 16px;background:#17313a;border-bottom:1px solid #2f6974;color:#d8f8ff;font:13px/1.6 -apple-system,system-ui,sans-serif">我的独立副本 · 兼容修复版 1.1 · 20261101.1 · <a href="/source.zip" style="color:#7fe3ea">下载完整源码</a> · 保留原作者署名</div>
 <div class="wrap">
   <div class="warn">
     <div class="t">⚠️ 免费开源项目 · 禁止售卖</div>
@@ -128,6 +132,19 @@ footer b{ color:#8fe0e6; }
     <p class="synced">📦 原站快照基于 <a href="https://github.com/Yu9191/wloc/releases" target="_blank" rel="noopener">Yu9191/wloc v1.1</a>：随机扰动半径 · 港澳台/百度坐标解析</p>
   </header>
 
+  <section class="note repair plat" aria-labelledby="repairTitle">
+    <h2 id="repairTitle">地图一直定位？先更新小火箭模块</h2>
+    <p>兼容修复版 <b>20261101.1</b> 已调整定位数据处理。针对 iOS 18.7 + Shadowrocket 的反馈准备，仍需在你的手机上验证。</p>
+    <ol>
+      <li>先在小火箭中停用旧模块，确认地图恢复正常定位。</li>
+      <li>在「配置 → 模块」更新原有 <b>iOS Location Spoofer (Stateless)</b> 模块。若用下方导入入口，请替换同名模块，只保留一份。</li>
+      <li>更新后重新连接小火箭，再进入选点页保存位置，打开地图检查结果。</li>
+    </ol>
+    <a class="big" id="updateShadowrocket" href="/ios-location-spoofer.sgmodule">打开小火箭更新模块</a>
+    <a class="manual" href="/ios-location-spoofer.sgmodule">查看模块文件 / 手动更新地址</a>
+    <p><b>只刷新网页不会更新手机里的脚本。</b>保存成功只说明配置已写入设备；若地图仍转圈，立即停用模块恢复定位，无需一直等待。</p>
+  </section>
+
   <div class="ctas">
     <a class="enter go" href="/picker">🗺️ 进入选点网页</a>
     <a class="enter video" href="https://youtu.be/EspuRlKWUxc" target="_blank" rel="noopener">▶️ 视频教程</a>
@@ -138,7 +155,7 @@ footer b{ color:#8fe0e6; }
 
   <h2>安装模块</h2>
   <p class="sub">选你的代理客户端，点「一键导入」直接装；或「复制」手动添加。</p>
-  <div class="note">📍 生效前提：① 代理 App 已连接（开关/引擎打开、<b>非「直连」模式</b>）；② 开启 HTTPS 解密(MITM) 并信任证书；③ 装好对应客户端的模块。之后打开选点页选位置、点「储存到设备」即可生效。iOS 26+ 切换后可能需重启一次设备清缓存。</div>
+  <div class="note">📍 使用前检查：① 代理 App 已连接（开关/引擎打开、<b>非「直连」模式</b>）；② 开启 HTTPS 解密(MITM) 并信任证书；③ 已更新对应客户端的模块。保存后请到地图 App 验证，网页无法确认系统实际定位。兼容模式只替换已有坐标及已有水平精度，海拔、垂直精度等保留系统原值。</div>
 
   <div id="plats"></div>
 
@@ -149,7 +166,7 @@ footer b{ color:#8fe0e6; }
     <code>[general]<br>#复制下面这些内容（另起一行）<br>resource_parser_url=https://raw.githubusercontent.com/KOP-XIAO/QuantumultX/master/Scripts/resource-parser.js</code>
   </div>
   <div class="mitm">
-    <b>MITM 主机名（如全部配置成功仍不生效，在 MITM / HTTPS 解密中手动加入下面四个域名）：</b>
+    <b>MITM 主机名（检查模块所需的以下四个域名；地图转圈时先停用模块恢复）：</b>
     <div class="hosts"><code>gs-loc.apple.com<br>gs-loc-cn.apple.com<br>bluedot.is.autonavi.com<br>bluedot.is.autonavi.com.gds.alibabadns.com</code></div>
   </div>
 
@@ -187,6 +204,7 @@ window.addEventListener('resize', buildWM);
 
 var origin = location.origin;
 function u(file){ return origin + '/' + file; }
+document.getElementById('updateShadowrocket').href = 'shadowrocket://install?module=' + encodeURIComponent(u('ios-location-spoofer.sgmodule'));
 var qxExtra = ', tag=iOS Location Spoofer, update-interval=172800, opt-parser=true, enabled=true';
 var PLATS = [
   { name:'Surge', file:'ios-location-spoofer.sgmodule', scheme:function(x){ return 'surge:///install-module?url=' + encodeURIComponent(x); } },
@@ -196,7 +214,7 @@ var PLATS = [
   { name:'Stash', file:'ios-location-spoofer.stoverride', scheme:function(x){ return 'stash://install-override?url=' + encodeURIComponent(x); } },
   { name:'Quantumult X', file:'ios-location-spoofer.snippet',
     scheme:function(x){ return 'quantumult-x:///add-resource?remote-resource=' + encodeURIComponent(JSON.stringify({ rewrite_remote:[x + qxExtra] })); },
-    note:'QX 没有模块面板：一键导入=添加「重写」资源(需已配资源解析器)；MITM 主机名要手动加进 设置→MITM。' }
+    note:'QX 使用独立定位脚本，本次通用脚本兼容修复不包含它，真机效果未验证。QX 没有模块面板：一键导入=添加「重写」资源(需已配资源解析器)；MITM 主机名要手动加进 设置→MITM。' }
 ];
 
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }

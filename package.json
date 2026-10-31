@@ -5,7 +5,7 @@
   "scripts": {
     "build": "bash scripts/build.sh",
     "validate": "node scripts/validate-artifact.mjs",
-    "test": "node tests/fork.test.mjs",
+    "test": "node tests/fork.test.mjs && node --test tests/protocol.test.mjs tests/settings.test.mjs tests/picker.test.mjs",
     "check:generated": "git diff --exit-code --stat -- worker/index.js",
     "preview": "node scripts/preview.mjs"
   }

@@ -71,6 +71,13 @@ body {
 .card { background:linear-gradient(180deg,rgba(25,30,40,.72),rgba(18,22,29,.72)); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:12px; box-shadow:0 8px 28px rgba(0,0,0,.34); }
 .card h3 { font-size:15px; font-weight:700; margin-bottom:12px; color:var(--txt); display:flex; align-items:center; gap:8px; }
 .card h3::before { content:""; width:3px; height:14px; border-radius:2px; background:linear-gradient(180deg,var(--cyan),var(--green)); flex:none; }
+.compat-card { margin:12px auto; max-width:600px; padding:16px; border:1px solid #2f6974; border-radius:12px; background:#10252d; font-size:13px; line-height:1.8; }
+.compat-card h2 { font-size:16px; color:var(--mono); margin-bottom:6px; }
+.compat-card ol { padding-left:22px; }
+.compat-card a { color:var(--mono); }
+.compat-card .btn { display:block; text-align:center; text-decoration:none; margin:10px 0 6px; color:#022a2d; }
+.btn:disabled { opacity:.55; cursor:wait; }
+@media(max-width:624px) { .compat-card { margin:12px; } }
 
 .coords { font-family:"SF Mono",ui-monospace,monospace; font-size:13.5px; color:var(--muted); padding:10px 12px; background:var(--inset); border:1px solid var(--line); border-radius:10px; word-break:break-all; }
 .crow { display:flex; align-items:center; gap:8px; padding:8px 12px; background:var(--inset); border:1px solid var(--line); border-radius:10px; margin-bottom:6px; }
@@ -166,7 +173,7 @@ body {
 </style>
 </head>
 <body>
-<div style="position:relative;z-index:10001;text-align:center;padding:12px 16px;background:#17313a;border-bottom:1px solid #2f6974;color:#d8f8ff;font:13px/1.6 -apple-system,system-ui,sans-serif">我的独立副本 · 2026-10-28 快照 · <a href="/source.zip" style="color:#7fe3ea">下载完整源码</a> · 保留原作者署名</div>
+<div style="position:relative;z-index:10001;text-align:center;padding:12px 16px;background:#17313a;border-bottom:1px solid #2f6974;color:#d8f8ff;font:13px/1.6 -apple-system,system-ui,sans-serif">我的独立副本 · 兼容修复版 1.1 · <a href="/source.zip" style="color:#7fe3ea">下载完整源码</a> · 保留原作者署名</div>
 <div class="topbar">
   <a class="back" href="/">← 主页</a>
   <span class="topcredit">📺 <a class="ytname" href="https://www.youtube.com/@CyberHandyman/videos" target="_blank" rel="noopener">YouTube CyberHandyman 赛博工具人</a><span class="forkline"> · fork from 鸣谢贡献者: Yu9191 / mekos2772 / acheong08 <span class="v11">· 原站标注 Yu9191 v1.1</span></span></span>
@@ -177,6 +184,18 @@ body {
   <div class="rb"><b>如果你是通过付款来到本页面，请立即联系退款。</b>任何售卖本项目/模块的都是骗子，一经发现立即删库，血本无归！！！！<br>仅供学习研究，禁止违法用途，后果自负、与作者无关，与 Apple 无关。</div>
 </div>
 <a class="vidbtn" href="https://youtu.be/EspuRlKWUxc" target="_blank" rel="noopener" data-i18n="video_btn">▶️ 视频教程（YouTube）</a>
+<section class="compat-card" aria-label="小火箭模块更新说明">
+  <h2>地图一直转圈？先更新小火箭模块</h2>
+  <ol>
+    <li>先停用旧定位模块，确认地图能恢复正常定位。</li>
+    <li>更新同名模块，只保留一份；更新后断开并重新连接小火箭。</li>
+    <li>刷新本页，重新保存位置，再打开地图验证。若仍转圈，请停用模块恢复。</li>
+  </ol>
+  <a id="updateModule" class="btn btn-primary" href="/ios-location-spoofer.sgmodule?v=20261101.1">在小火箭中更新模块</a>
+  <a href="/ios-location-spoofer.sgmodule?v=20261101.1">手动打开模块链接</a>
+  <p>修复版本：20261101.1。只刷新网页不会更新手机脚本。保存成功仅表示设备配置已写入，不代表 iPhone 已接受定位。</p>
+  <p id="settingsState" role="status">正在检查设备设置脚本版本…</p>
+</section>
 <div style="position:relative">
 <div id="map"></div>
 <div class="lang-switch">
@@ -200,23 +219,23 @@ body {
     <div id="coordGrid" style="display:none">
       <div class="crow"><span class="ck" data-i18n="lat">Lat</span><span class="cv" id="cvLat"></span><button class="btn btn-sm btn-secondary copybtn" data-i18n="copy" onclick="copyField('lat',this)">Copy</button></div>
       <div class="crow"><span class="ck" data-i18n="lon">Lon</span><span class="cv" id="cvLon"></span><button class="btn btn-sm btn-secondary copybtn" data-i18n="copy" onclick="copyField('lon',this)">Copy</button></div>
-      <div class="crow"><span class="ck" data-i18n="alt">Alt</span><input class="cvi" id="altInput" type="number" inputmode="decimal" step="1" /><button class="btn btn-sm btn-secondary copybtn" data-i18n="copy" onclick="copyField('alt',this)">Copy</button></div>
+      <div class="crow"><span class="ck" data-i18n="alt">Alt</span><input class="cvi" id="altInput" type="number" inputmode="decimal" step="1" readonly /><button class="btn btn-sm btn-secondary copybtn" data-i18n="copy" onclick="copyField('alt',this)">Copy</button></div>
       <div class="acc-row">
         <div class="accfield"><span class="acclbl" data-i18n="hacc">H. accuracy</span><input id="haccInput" type="number" inputmode="numeric" step="1" min="1" value="39" /></div>
-        <div class="accfield"><span class="acclbl" data-i18n="vacc">V. accuracy</span><input id="vaccInput" type="number" inputmode="numeric" step="1" min="1" value="1000" /></div>
-        <div class="accfield"><span class="acclbl" data-i18n="jitter">Jitter radius</span><input id="jitterInput" type="number" inputmode="numeric" step="1" min="0" value="0" /></div>
+        <div class="accfield"><span class="acclbl" data-i18n="vacc">V. accuracy</span><input id="vaccInput" type="text" value="保留系统原值" readonly /></div>
+        <div class="accfield"><span class="acclbl" data-i18n="jitter">Jitter radius</span><input id="jitterInput" type="number" inputmode="numeric" step="1" min="0" max="10000" value="0" /></div>
       </div>
     </div>
     <div class="row">
       <button class="btn btn-primary" id="saveBtn" data-i18n="save" onclick="save()">Save to Device</button>
-      <button class="btn btn-secondary" data-i18n="restore" onclick="restoreReal()">Restore real</button>
+      <button class="btn btn-secondary" id="restoreBtn" data-i18n="restore" onclick="restoreReal()">Restore real</button>
     </div>
     <div class="row">
       <button class="btn btn-secondary" data-i18n="copy_params" onclick="copyParams(this)">Copy module params</button>
       <button class="btn btn-secondary" data-i18n="add_fav" onclick="addFav()">Add Favorite</button>
       <button class="btn btn-secondary" data-i18n="locate" onclick="locateMe()">Current Location</button>
     </div>
-    <div class="hint" data-i18n="alt_hint">Altitude is auto-filled from Open-Meteo (WGS-84) and editable. It is written to the device on Save and applied by the module.</div>
+    <div class="hint" data-i18n="alt_hint">海拔仅供参考，兼容模式保留系统返回的海拔和垂直精度。</div>
     <div class="accnote" data-i18n-html="acc_note_html"></div>
   </div>
   <div class="card">
@@ -227,14 +246,14 @@ body {
     <div id="favList" class="fav-list"></div>
   </div>
   <div class="card">
-    <h3 data-i18n="active_title">Device location status</h3>
+    <h3 data-i18n="active_title">设备已保存的坐标</h3>
     <div class="active-loc" id="activeLoc">
       <div class="label" data-i18n="active_label">On-device coordinates (latitude/longitude/altitude)</div>
       <div class="value" id="activeValue">Querying...</div>
     </div>
     <div class="row">
-      <button class="btn btn-sm btn-secondary" data-i18n="refresh" onclick="queryActive()">Refresh</button>
-      <button class="btn btn-sm btn-danger" data-i18n="clear_data" onclick="clearActive()">Disable location</button>
+      <button class="btn btn-sm btn-secondary" id="refreshBtn" data-i18n="refresh" onclick="queryActive()">Refresh</button>
+      <button class="btn btn-sm btn-danger" id="clearDeviceBtn" data-i18n="clear_data" onclick="clearActive()">Clear Data</button>
     </div>
   </div>
   <div class="card">
@@ -270,6 +289,10 @@ body {
 </div>
 <script>
 const SAVE_API = 'https://gs-loc.apple.com/ils-settings/save';
+const SETTINGS_VERSION = '20261101.1';
+const DEVICE_TIMEOUT_MS = 8000;
+let deviceBusy = false;
+document.getElementById('updateModule').href = 'shadowrocket://install?module=' + encodeURIComponent(location.origin + '/ios-location-spoofer.sgmodule?v=' + SETTINGS_VERSION);
 const PARSE_API = '/api/parse';
 const ELEV_API = 'https://api.open-meteo.com/v1/elevation';
 const FAV_KEY = 'ils_favorites';
@@ -281,8 +304,6 @@ let elev = null, elevState = 'idle'; // idle | loading | ok | fail
 let elevSeq = 0, elevTimer = null;
 const elevCache = new Map();
 let activeLon = null, activeLat = null, activeAcc = null, activeAlt = null, activeStatus = 'querying';
-let deviceRequestSeq = 0; // Ignore queries that finish after a newer save/clear/query.
-let deviceMutationPending = false;
 let savedLon = null, savedLat = null, savedTimeStr = '';
 
 /* ---- i18n ---- */
@@ -290,43 +311,40 @@ const I18N = {
   zh: {
     title: 'iOS 虚拟定位',
     layer_satellite: '卫星', layer_amap: '高德', layer_color: '彩色', layer_standard: '标准', layer_dark: '暗色',
-    err_html: '<b>模块未生效</b>请检查以下配置：<br>1. 已安装并启用 iOS Location Spoofer 模块<br>2. MITM 已开启且信任证书<br>3. MITM 主机名包含 gs-loc.apple.com<br>4. 当前网络已走代理',
+    err_html: '<b>尚未确认设备保存</b>请先更新本页提供的小火箭模块，再检查：<br>1. 已安装并启用 iOS Location Spoofer 模块<br>2. MITM 已开启且信任证书<br>3. MITM 主机名包含 gs-loc.apple.com<br>4. 当前网络已走代理',
     choose_title: '选择目标位置',
     coords_hint: '点击地图或使用下方工具选择位置',
     save: '储存到设备', add_fav: '收藏位置', locate: '当前位置',
     copy: '复制', copy_params: '复制模块参数',
     lat: '纬度', lon: '经度', alt: '海拔',
     alt_querying: '海拔查询中…', alt_na: '海拔不可用',
-    alt_hint: '海拔由 Open-Meteo 自动查询（WGS-84），储存到设备时随经纬度一并写入，由 iOS Location Spoofer 模块生效。',
-    acc_note_html: '<b>精度参数怎么填</b>' +
-      '<code>horizontalAccuracy</code> 水平精度（米），默认 <em>39</em>，越小越「精准」—— 想更像 GPS 可设 <em>5~15</em>；保持 <em>39</em> 也正常。<br>' +
-      '<code>verticalAccuracy</code> 垂直精度（米），默认 <em>1000</em> —— 本页已自动填入目标点真实海拔，可调小到 <em>10~30</em>，让海拔显得更可信。<br>' +
-      '<code>扰动半径</code>（米），默认 <em>0</em>（关闭）—— 设为 <em>N</em> 后，每次定位在目标点周围 <em>N</em> 米内随机偏移，避免每次结果一模一样。想固定在精确坐标就留 <em>0</em>。' +
-      '<span class="src">参数建议来自上游项目 mekos2772 / ios-location-spoofer</span>',
+    alt_hint: '海拔查询仅供参考。兼容模式保留系统返回的海拔、垂直精度和运动信息，不会用这里的数值覆盖。',
+    acc_note_html: '<b>兼容模式的参数</b>水平精度默认 39 米，只替换响应中已有的精度值。海拔与垂直精度保留系统原值。<br>扰动半径 0 表示关闭，允许 0–10000 米；它只让每次目标坐标在所选范围内偏移，不能保证系统接受定位。',
     fav_title: '收藏的位置', clear_all: '清空全部',
-    active_title: '设备定位状态', active_label: '设备本地坐标 (latitude/longitude/altitude)',
+    active_title: '设备已保存的坐标', active_label: '保存状态不代表系统实际定位结果',
     refresh: '刷新', clear_data: '停用定位',
     paste_title: '粘贴地图链接', paste_ph: 'Apple/Google/高德/百度地图链接 或 经纬度', parse: '解析',
     paste_hint: '支持 Apple Maps · Google Maps · 高德 · 百度 · 坐标文本（自动换算为 WGS-84）',
     search_title: '搜索地点', search_ph: '搜地名，回车列出候选（只预览，不改定位）', search: '搜索',
     status_hint: '选好位置后点击「储存到设备」写入代理工具',
     modal_title: '收藏此位置', modal_ph: '输入备注名称（如: 公司、家）', cancel: '取消', save_short: '保存',
-    acc: '精度', restore: '恢复真实定位', restored: '✓ 虚拟定位已停用，坐标保留。定位服务开关关闭后，关掉代理开关，等待至少 10 秒钟，再次开启生效', hacc: '水平精度', vacc: '垂直精度', jitter: '扰动半径(米)',
-    querying: '查询中...', no_saved: '无已保存的坐标', query_failed: '查询失败，无法确认定位状态 (请检查代理模块)', disabled: '已保存但停用', enabled: '已启用定位',
+    acc: '精度', restore: '恢复真实定位', restored: '✓ 已发送停用指令。重新打开地图确认恢复；若仍转圈，请在小火箭中停用定位模块。', hacc: '水平精度', vacc: '垂直精度', jitter: '扰动半径(米)',
+    disabled: '已保存但停用', disabled_empty: '已停用虚拟定位', unverified: '旧版设置脚本，请先更新模块', version_old: '未检测到修复版设置脚本，请先更新小火箭模块并重新连接。', version_ok: '设置脚本 20261101.1 已连接；此检查不代表定位核心或 iOS 生效。', version_unknown: '无法连接设备设置脚本，请检查小火箭模块和连接。', timeout: '设备响应超过 8 秒，结果未确认。请检查小火箭连接；若地图仍转圈，停用定位模块。', invalid_settings: '水平精度必须大于 0，扰动半径须为 0–10000 米。',
+    querying: '查询中...', no_saved: '无已保存的坐标', query_failed: '查询失败，无法确认定位状态 (请检查代理模块)', cleared: '已清除',
     fav_empty: '暂无收藏，选好位置后点击「收藏位置」',
-    active_now: '✓ 已启用', del: '删除',
+    active_now: '✓ 设备已保存', del: '删除',
     pick_first: '请先在地图上选择一个位置',
     enter_label: '请输入备注名称',
     added: function(n){ return '已收藏: ' + n; },
     deleted: function(n){ return '已删除: ' + n; },
     clear_fav_confirm: '确定清空所有收藏？', all_cleared: '已清空所有收藏',
-    clear_confirm: '确定停用虚拟定位？已保存的坐标会保留，重新选择并储存可再次启用。',
-    dev_cleared: '虚拟定位已停用，已保存的坐标保留',
+    clear_confirm: '确定停用设备上的虚拟定位？收藏不会被删除。',
+    dev_cleared: '已停用虚拟定位，请在地图中确认恢复',
     clear_failed: function(e){ return '清除失败: ' + e; },
-    clear_failed_cfg: '清除失败 - 请检查模块配置',
+    clear_failed_cfg: '未确认停用成功。若地图仍转圈，请在小火箭中手动停用定位模块。',
     saving: '储存中...', saved: '✓ 已储存',
     written: function(lo, la, ts){ return '✓ 已写入: ' + lo.toFixed(6) + ', ' + la.toFixed(6) + ' · ' + ts; },
-    saved_toast: '✓ 坐标已成功写入模块，定位服务关闭开关，等待至少 10 秒钟，再次开启生效',
+    saved_toast: '✓ 已写入设备。请打开地图确认；若仍一直转圈，停用定位模块恢复。',
     video_btn: '▶️ 视频教程（YouTube）',
     save_failed: '✗ 储存失败 - 请检查模块配置', write_failed: '写入失败',
     no_geo: '浏览器不支持定位', getting_loc: '获取位置中...', got_loc: '已获取当前位置',
@@ -341,43 +359,40 @@ const I18N = {
   en: {
     title: 'iOS Location Spoofer',
     layer_satellite: 'Satellite', layer_amap: 'Amap', layer_color: 'Color', layer_standard: 'Standard', layer_dark: 'Dark',
-    err_html: '<b>Module not active</b>Please check the following:<br>1. The iOS Location Spoofer module is installed and enabled<br>2. MITM is on and the certificate is trusted<br>3. The MITM hostname list includes gs-loc.apple.com<br>4. The current network is routed through the proxy',
+    err_html: '<b>Device save was not confirmed</b>Update the module from this page, then check:<br>1. The iOS Location Spoofer module is installed and enabled<br>2. MITM is on and the certificate is trusted<br>3. The MITM hostname list includes gs-loc.apple.com<br>4. The current network is routed through the proxy',
     choose_title: 'Choose target location',
     coords_hint: 'Tap the map or use the tools below to pick a location',
     save: 'Save to Device', add_fav: 'Add Favorite', locate: 'Current Location',
     copy: 'Copy', copy_params: 'Copy module params',
     lat: 'Lat', lon: 'Lon', alt: 'Alt',
     alt_querying: 'querying altitude…', alt_na: 'altitude unavailable',
-    alt_hint: 'Altitude is auto-filled from Open-Meteo (WGS-84), written to the device on Save, and applied by the iOS Location Spoofer module.',
-    acc_note_html: '<b>Choosing the accuracy values</b>' +
-      '<code>horizontalAccuracy</code> in metres, default <em>39</em> — the smaller, the more "precise" it looks. Set <em>5–15</em> to look more like GPS; <em>39</em> is perfectly fine too.<br>' +
-      '<code>verticalAccuracy</code> in metres, default <em>1000</em> — this page already fills in the target\'s real altitude, so lowering it to <em>10–30</em> makes that altitude look more credible.<br>' +
-      '<code>Jitter radius</code> in metres, default <em>0</em> (off) — set to <em>N</em> and each positioning is randomly offset within <em>N</em> m of the target, so results are never identical. Leave <em>0</em> to stay pinned to the exact point.' +
-      '<span class="src">Guidance from the upstream project mekos2772 / ios-location-spoofer</span>',
+    alt_hint: 'Elevation is a reference only. Compatibility mode preserves the original altitude, vertical accuracy and motion data.',
+    acc_note_html: '<b>Compatibility settings</b>Horizontal accuracy defaults to 39 metres and replaces existing accuracy fields only. Original altitude and vertical accuracy are preserved.<br>Jitter accepts 0–10000 metres; 0 disables it. These settings do not guarantee that iOS will accept the location.',
     fav_title: 'Favorites', clear_all: 'Clear All',
-    active_title: 'Device location status', active_label: 'On-device coordinates (latitude/longitude/altitude)',
+    active_title: 'Coordinates saved on device', active_label: 'Saved settings do not confirm actual system location',
     refresh: 'Refresh', clear_data: 'Disable location',
     paste_title: 'Paste map link', paste_ph: 'Apple / Google / Amap / Baidu map link or coordinates', parse: 'Parse',
     paste_hint: 'Supports Apple Maps · Google Maps · Amap · Baidu · coordinate text (auto-converted to WGS-84)',
     search_title: 'Search place', search_ph: 'Search a place, Enter to list candidates (preview only)', search: 'Search',
     status_hint: 'Pick a location, then tap "Save to Device" to write it to your proxy tool',
     modal_title: 'Add this location to favorites', modal_ph: 'Enter a label (e.g. Office, Home)', cancel: 'Cancel', save_short: 'Save',
-    acc: 'Accuracy', restore: 'Restore real location', restored: '✓ Location disabled; saved coordinates kept. Turn Location Services OFF, switch your proxy off, wait at least 10 seconds, then turn it back ON to take effect.', hacc: 'H. accuracy', vacc: 'V. accuracy', jitter: 'Jitter radius(m)',
-    querying: 'Querying...', no_saved: 'No saved coordinates', query_failed: 'Query failed; location status unknown (check the proxy module)', disabled: 'Saved but disabled', enabled: 'Location enabled',
+    acc: 'Accuracy', restore: 'Restore real location', restored: '✓ Disable command confirmed. Reopen Maps to check recovery; if it still spins, turn off the location module in your client.', hacc: 'H. accuracy', vacc: 'V. accuracy', jitter: 'Jitter radius(m)',
+    disabled: 'Saved but disabled', disabled_empty: 'Location changes disabled', unverified: 'Old settings script: update the module first', version_old: 'Updated settings script not detected. Update the module and reconnect your client.', version_ok: 'Settings script 20261101.1 connected; this does not verify the response script or iOS location.', version_unknown: 'Cannot reach device settings. Check the module and client connection.', timeout: 'No confirmed device response within 8 seconds. Check your client; disable the module if Maps keeps spinning.', invalid_settings: 'Accuracy must be positive; jitter must be 0–10000 metres.',
+    querying: 'Querying...', no_saved: 'No saved coordinates', query_failed: 'Query failed; device state unknown (check the proxy module)', cleared: 'Cleared',
     fav_empty: 'No favorites yet. Pick a location and tap "Add Favorite".',
-    active_now: '✓ Enabled', del: 'Delete',
+    active_now: '✓ Saved on device', del: 'Delete',
     pick_first: 'Please pick a location on the map first',
     enter_label: 'Please enter a label',
     added: function(n){ return 'Added: ' + n; },
     deleted: function(n){ return 'Deleted: ' + n; },
     clear_fav_confirm: 'Clear all favorites?', all_cleared: 'All favorites cleared',
-    clear_confirm: 'Disable location spoofing? Saved coordinates will be kept. Select and save them again to enable.',
-    dev_cleared: 'Location disabled; saved coordinates kept',
+    clear_confirm: 'Disable location changes on this device? Favorites will be kept.',
+    dev_cleared: 'Location changes disabled. Check recovery in Maps.',
     clear_failed: function(e){ return 'Clear failed: ' + e; },
-    clear_failed_cfg: 'Clear failed - please check the module configuration',
+    clear_failed_cfg: 'Disable was not confirmed. If Maps still spins, turn off the location module in your client.',
     saving: 'Saving...', saved: '✓ Saved',
     written: function(lo, la, ts){ return '✓ Written: ' + lo.toFixed(6) + ', ' + la.toFixed(6) + ' · ' + ts; },
-    saved_toast: '✓ Coordinates written to the module. Turn Location Services OFF, wait at least 10 seconds, then turn it back ON to take effect.',
+    saved_toast: '✓ Settings saved on device. Check in Maps; if it keeps spinning, disable the location module.',
     video_btn: '▶️ Video tutorial (YouTube)',
     save_failed: '✗ Save failed - please check the module configuration', write_failed: 'Write failed',
     no_geo: 'Browser does not support geolocation', getting_loc: 'Getting location...', got_loc: 'Current location acquired',
@@ -449,7 +464,7 @@ function showMarker() { if (!markerShown) { marker.addTo(map); markerShown = tru
 marker.on('dragend', e => { const p=e.target.getLatLng(); setPos(p.lat, p.lng); });
 map.on('click', e => { setPos(e.latlng.lat, e.latlng.lng); });
 
-/* Altitude is an editable field (auto-filled from Open-Meteo, user can override). */
+/* Elevation is a read-only reference; the response script preserves original altitude. */
 function currentAlt() {
   const el = document.getElementById('altInput');
   if (!el) return null;
@@ -531,8 +546,10 @@ function toast(msg, ms) {
   toastTimer = setTimeout(() => t2.classList.remove('show'), ms || 2500);
 }
 
-function showError(show) {
-  document.getElementById('errorBanner').style.display = show ? 'block' : 'none';
+function showError(show, message) {
+  const el = document.getElementById('errorBanner');
+  el.style.display = show ? 'block' : 'none';
+  if (message) el.textContent = message;
 }
 
 /* ---- Clipboard ---- */
@@ -566,8 +583,7 @@ function copyField(which, btn) {
 
 function moduleParamString() {
   let s = 'latitude=' + lat.toFixed(6) + '&longitude=' + lon.toFixed(6);
-  const a = currentAlt(); if (a !== null) s += '&altitude=' + a;
-  s += '&horizontalAccuracy=' + haccVal() + '&verticalAccuracy=' + vaccVal();
+  s += '&horizontalAccuracy=' + haccVal();
   const j = jitterVal(); if (j > 0) s += '&randomRadius=' + j;
   return s;
 }
@@ -577,7 +593,6 @@ function copyParams(btn) {
   const s = moduleParamString();
   copyText(s).then(() => {
     toast(t('copied', s));
-    if (currentAlt() === null) toast(t('alt_unknown_copy'), 3000);
     if (btn) { const o = btn.textContent; btn.classList.add('success'); btn.textContent = t('saved'); setTimeout(() => { btn.textContent = o; btn.classList.remove('success'); }, 1200); }
   }).catch(() => toast(t('copy_failed'), 3000));
 }
@@ -600,7 +615,7 @@ function renderFavs() {
     return;
   }
   el.innerHTML = favs.map((f, i) => {
-    const isActive = activeStatus === 'ok' && activeLon !== null && activeLat !== null && Math.abs(f.lon - activeLon) < 0.000001 && Math.abs(f.lat - activeLat) < 0.000001;
+    const isActive = activeStatus === 'ok' && activeLon !== null && Math.abs(f.lon - activeLon) < 0.000001 && Math.abs(f.lat - activeLat) < 0.000001;
     const altStr = (typeof f.alt === 'number') ? ('  ·  ' + f.alt + ' m') : '';
     return '<div class="fav-item" onclick="loadFav(' + i + ')">' +
       '<div class="fav-info">' +
@@ -670,144 +685,173 @@ function clearAllFav() {
 /* ---- Active location query ---- */
 function renderActive() {
   const el = document.getElementById('activeValue');
-  if (activeStatus === 'ok' || activeStatus === 'disabled') {
-    el.textContent = t(activeStatus === 'ok' ? 'enabled' : 'disabled') + ' · ' + t('lon') + ' ' + activeLon.toFixed(6) + '  ' + t('lat') + ' ' + activeLat.toFixed(6)
+  if (activeStatus === 'ok' || (activeStatus === 'disabled' && activeLon !== null)) {
+    el.textContent = (activeStatus === 'disabled' ? t('disabled') + ' · ' : '') + t('lon') + ' ' + activeLon.toFixed(6) + '  ' + t('lat') + ' ' + activeLat.toFixed(6)
       + (activeAcc ? ('  ' + t('acc') + ' ' + activeAcc + 'm') : '')
-      + (activeAlt !== null && activeAlt !== undefined ? ('  ' + t('alt') + ' ' + activeAlt + 'm') : '');
+;
+  } else if (activeStatus === 'disabled' || activeStatus === 'unverified') {
+    el.textContent = t(activeStatus === 'disabled' ? 'disabled_empty' : activeStatus);
   } else if (activeStatus === 'none') {
     el.textContent = t('no_saved');
   } else if (activeStatus === 'failed') {
     el.textContent = t('query_failed');
+  } else if (activeStatus === 'cleared') {
+    el.textContent = t('disabled_empty');
   } else {
     el.textContent = t('querying');
   }
 }
 
-// Do not coerce null, blank text or booleans into the valid coordinate zero.
-function coordinate(value, limit) {
-  if ((typeof value !== 'number' && typeof value !== 'string') || String(value).trim() === '') return NaN;
-  const n = Number(value);
-  return Number.isFinite(n) && Math.abs(n) <= limit ? n : NaN;
+// Include JSON decoding in the deadline: a received header alone is not a response.
+async function deviceRequest(query) {
+  const controller = new AbortController();
+  let timer;
+  try {
+    const deadline = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new Error(t('timeout')));
+        controller.abort();
+      }, DEVICE_TIMEOUT_MS);
+    });
+    const response = (async () => {
+      const r = await fetch(SAVE_API + '?' + query, {
+        method: 'GET', mode: 'cors', cache: 'no-store', signal: controller.signal
+      });
+      if (!r.ok) throw new Error(t('version_unknown'));
+      const data = await r.json();
+      if (!data || typeof data !== 'object') throw new Error(t('version_unknown'));
+      return data;
+    })();
+    return await Promise.race([response, deadline]);
+  } finally { clearTimeout(timer); }
 }
 
-function resetDeviceState(status) {
+function setDeviceBusy(value) {
+  deviceBusy = value;
+  ['saveBtn', 'restoreBtn', 'clearDeviceBtn', 'refreshBtn'].forEach(id => {
+    document.getElementById(id).disabled = value;
+  });
+}
+function showSettingsVersion(data) {
+  const current = data && data.settingsVersion === SETTINGS_VERSION;
+  document.getElementById('settingsState').textContent = t(current ? 'version_ok' : 'version_old');
+  return current;
+}
+function resetActive(status) {
+  savedLon = null; updateStatus();
   activeLon = null; activeLat = null; activeAcc = null; activeAlt = null;
   activeStatus = status;
-  savedLon = null; savedLat = null; savedTimeStr = '';
-  updateStatus(); renderActive(); renderFavs();
 }
-
-function beginDeviceRequest() {
-  const seq = ++deviceRequestSeq;
-  resetDeviceState('querying');
-  return seq;
+function deviceCoordinate(value, limit) {
+  if ((typeof value !== 'number' && typeof value !== 'string') ||
+      !/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(String(value).trim())) return null;
+  const n = Number(value);
+  return Number.isFinite(n) && Math.abs(n) <= limit ? n : null;
 }
-
-async function fetchDevice(url) {
-  const r = await fetch(url, { method:'GET', mode:'cors', cache:'no-store' });
-  if (!r.ok) throw new Error('HTTP ' + r.status);
-  return r.json();
-}
-
-function applyDeviceState(d) {
-  // Older cached settings scripts report an empty store with this exact error.
-  if (d && d.success === false && d.error === 'No saved coordinates') {
-    resetDeviceState('none');
-    return;
+function applyDeviceState(d, current) {
+  if (!d.success) throw new Error(t('query_failed'));
+  if (d.enabled !== true && d.enabled !== false) throw new Error(t('query_failed'));
+  if (d.hasCoordinates === false && d.enabled === false) {
+    resetActive('none'); return;
   }
-  if (!d || d.success !== true || typeof d.enabled !== 'boolean') throw new Error('Invalid device state');
-  if (d.hasCoordinates === false && d.latitude == null && d.longitude == null && !d.enabled) {
-    resetDeviceState('none');
-    return;
-  }
-  const la = coordinate(d.latitude, 90), lo = coordinate(d.longitude, 180);
-  if (d.hasCoordinates === false || !Number.isFinite(la) || !Number.isFinite(lo)) throw new Error('Invalid coordinates');
-  activeLon = lo; activeLat = la;
-  activeAcc = d.horizontalAccuracy != null ? d.horizontalAccuracy : (d.accuracy != null ? d.accuracy : null);
-  activeAlt = d.altitude != null ? d.altitude : null;
-  activeStatus = d.enabled ? 'ok' : 'disabled';
-  if (d.randomRadius != null) { const ji = document.getElementById('jitterInput'); if (ji) ji.value = d.randomRadius; }
-  // Disabled coordinates remain visible as stored data, never as an active map target.
+  const lo = deviceCoordinate(d.longitude, 180), la = deviceCoordinate(d.latitude, 90);
+  if (lo === null || la === null) throw new Error(t('query_failed'));
+  if (!current && d.enabled === true) { resetActive('unverified'); return; }
+  activeLon = lo; activeLat = la; activeAcc = d.horizontalAccuracy ?? d.accuracy ?? null;
+  activeAlt = null; activeStatus = d.enabled ? 'ok' : 'disabled';
+  if (!d.enabled) { savedLon = null; updateStatus(); }
+  if (d.randomRadius != null) document.getElementById('jitterInput').value = d.randomRadius;
   if (d.enabled && !didInitialCenter && !selected) {
     didInitialCenter = true;
-    moveTo(activeLat, activeLon, 15, activeAlt != null ? activeAlt : undefined);
+    moveTo(la, lo, 15);
   }
-  renderActive(); renderFavs();
 }
-
 async function queryActive() {
-  if (deviceMutationPending) return; // The mutation will return the authoritative state.
-  const seq = beginDeviceRequest();
+  if (deviceBusy) return;
+  setDeviceBusy(true);
+  activeStatus = 'querying'; renderActive(); renderFavs();
   try {
-    const d = await fetchDevice(SAVE_API + '?action=query');
-    if (seq !== deviceRequestSeq) return;
-    applyDeviceState(d);
+    const d = await deviceRequest('action=query');
+    const current = showSettingsVersion(d);
+    if (!current && d.success === false && d.error === 'No saved coordinates') resetActive('none');
+    else applyDeviceState(d, current);
   } catch(e) {
-    if (seq === deviceRequestSeq) resetDeviceState('failed');
-  }
-}
-
-// Saves/clears from older cached scripts return only success and require a query.
-async function mutationState(d) {
-  if (!d || d.success !== true) throw new Error(d && d.error || 'Device write failed');
-  return typeof d.enabled === 'boolean' ? d : fetchDevice(SAVE_API + '?action=query');
-}
-
-async function disableLocation(message) {
-  if (deviceMutationPending) return;
-  deviceMutationPending = true;
-  const seq = beginDeviceRequest();
-  try {
-    const d = await mutationState(await fetchDevice(SAVE_API + '?action=clear'));
-    if (seq !== deviceRequestSeq) return;
-    applyDeviceState(d);
-    if (activeStatus !== 'disabled' && activeStatus !== 'none') throw new Error('Location is still enabled');
-    toast(t(message), message === 'restored' ? 30000 : 2500);
-  } catch(e) {
-    if (seq === deviceRequestSeq) {
-      resetDeviceState('failed');
-      toast(t('clear_failed_cfg'), 3000);
-    }
+    resetActive('failed');
+    document.getElementById('settingsState').textContent = t('version_unknown');
   } finally {
-    deviceMutationPending = false;
+    renderActive(); renderFavs(); setDeviceBusy(false);
   }
 }
 
+async function disableDevice() {
+  if (deviceBusy) return;
+  setDeviceBusy(true);
+  showError(false);
+  try {
+    // Keep recovery available even when an old settings script is still cached.
+    let d = await deviceRequest('action=clear');
+    if (!d.success) throw new Error(t('clear_failed_cfg'));
+    if (d.enabled === undefined) d = await deviceRequest('action=query');
+    if (!d.success || d.enabled !== false) throw new Error(t('clear_failed_cfg'));
+    const current = showSettingsVersion(d);
+    if (d.disabledConfirmed === true && d.stateError) {
+      resetActive('disabled');
+      showError(true, lang === 'zh' ? '已确认停用虚拟定位，但原保存坐标暂时无法读取。请在地图中确认恢复。' : 'Location changes are disabled, but the saved coordinates could not be read. Check recovery in Maps.');
+    }
+    else if (d.hasCoordinates === undefined && d.longitude == null && d.latitude == null) resetActive('disabled');
+    else applyDeviceState(d, current);
+    savedLon = null;
+    updateStatus(); renderActive(); renderFavs();
+    toast(t('restored'), 10000);
+  } catch(e) {
+    resetActive('failed'); renderActive(); renderFavs();
+    showError(true, t('clear_failed_cfg'));
+    toast(t('clear_failed_cfg'), 10000);
+  } finally { setDeviceBusy(false); }
+}
 function clearActive() {
-  if (!confirm(t('clear_confirm'))) return;
-  return disableLocation('dev_cleared');
+  if (!deviceBusy && confirm(t('clear_confirm'))) return disableDevice();
 }
 
 /* ---- Save to device ---- */
 async function save() {
-  if (deviceMutationPending) return;
+  if (deviceBusy) return;
   if (!selected) { toast(t('pick_first')); return; }
+  // Freeze the selected point before any request; map gestures may continue.
+  const snapshot = {
+    lon, lat,
+    hacc: Number(document.getElementById('haccInput').value),
+    radius: Number(document.getElementById('jitterInput').value)
+  };
+  if (!Number.isFinite(snapshot.hacc) || snapshot.hacc <= 0 || snapshot.hacc > Number.MAX_SAFE_INTEGER ||
+      !Number.isFinite(snapshot.radius) || snapshot.radius < 0 || snapshot.radius > 10000) {
+    toast(t('invalid_settings'), 5000); return;
+  }
   const btn = document.getElementById('saveBtn');
-  btn.textContent = t('saving'); btn.disabled = true;
-  showError(false);
-  deviceMutationPending = true;
-  const seq = beginDeviceRequest();
+  setDeviceBusy(true); btn.textContent = t('saving'); showError(false);
+  activeStatus = 'querying'; renderActive(); renderFavs();
   try {
-    let url = SAVE_API + '?lon=' + lon + '&lat=' + lat;
-    const a = currentAlt(); if (a !== null) url += '&alt=' + a;
-    url += '&hacc=' + haccVal() + '&vacc=' + vaccVal() + '&randomRadius=' + jitterVal();
-    const d = await mutationState(await fetchDevice(url));
-    if (seq !== deviceRequestSeq) return;
-    applyDeviceState(d);
-    if (activeStatus !== 'ok') throw new Error('Location was not enabled');
-    // Use the acknowledged device coordinates, even if the map moved while saving.
-    savedLon = activeLon; savedLat = activeLat; savedTimeStr = new Date().toLocaleTimeString();
-    updateStatus();
-    toast(t('saved_toast'), 30000);
-  } catch(e) {
-    if (seq === deviceRequestSeq) {
-      resetDeviceState('failed');
-      showError(true);
-      toast(t('save_failed'), 4000);
+    const before = await deviceRequest('action=query');
+    if (!showSettingsVersion(before)) throw new Error(t('version_old'));
+    const query = 'action=save&lon=' + encodeURIComponent(snapshot.lon) + '&lat=' + encodeURIComponent(snapshot.lat)
+      + '&hacc=' + encodeURIComponent(snapshot.hacc) + '&randomRadius=' + encodeURIComponent(snapshot.radius);
+    const d = await deviceRequest(query);
+    if (!showSettingsVersion(d)) throw new Error(t('version_old'));
+    if (!d.success || d.enabled !== true ||
+        deviceCoordinate(d.longitude, 180) !== snapshot.lon || deviceCoordinate(d.latitude, 90) !== snapshot.lat) {
+      throw new Error(t('save_failed') + ' ' + t('clear_failed_cfg'));
     }
+    activeLon = snapshot.lon; activeLat = snapshot.lat; activeAcc = snapshot.hacc; activeAlt = null;
+    activeStatus = 'ok';
+    savedLon = snapshot.lon; savedLat = snapshot.lat; savedTimeStr = new Date().toLocaleTimeString();
+    updateStatus(); renderActive(); renderFavs();
+    toast(t('saved_toast'), 10000);
+  } catch(e) {
+    resetActive('failed'); renderActive(); renderFavs();
+    const message = e && e.message ? e.message : t('save_failed');
+    showError(true, message); toast(message, 10000);
   } finally {
-    deviceMutationPending = false;
-    btn.textContent = t('save'); btn.disabled = false;
+    btn.textContent = t('save'); btn.className = 'btn btn-primary'; setDeviceBusy(false);
   }
 }
 
@@ -876,9 +920,7 @@ function selectSearchResult(i) {
   moveTo(parseFloat(p.lat), parseFloat(p.lon), 15);
   toast((p.display_name || '').slice(0, 40));
 }
-function restoreReal() {
-  return disableLocation('restored');
-}
+function restoreReal() { return disableDevice(); }
 
 document.addEventListener('paste', e => {
   const target = e.target;

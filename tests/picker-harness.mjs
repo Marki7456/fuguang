@@ -54,6 +54,8 @@ export function createPicker(html, device, storage = new Map()) {
   const marker = { on() {}, addTo() {}, setLatLng() {} };
   let intercept = null;
   const requests = [];
+  const timers = new Map();
+  let nextTimer = 1;
   const box = vm.createContext({
     document: {
       documentElement: {}, body: {}, getElementById: element,
@@ -61,9 +63,13 @@ export function createPicker(html, device, storage = new Map()) {
     },
     window: { innerWidth: 390, innerHeight: 844, addEventListener() {} },
     navigator: {}, confirm: () => true,
+    location: { origin: 'https://test.example' }, AbortController,
     localStorage: { getItem: k => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, v) },
     L: { map: () => map, tileLayer: () => ({ addTo() {} }), marker: () => marker },
-    setTimeout() { return 1; }, clearTimeout() {}, setInterval() {},
+    // Timers are explicit so request deadlines can be exercised instantly.
+    // Other UI timers (elevation, toast) do not schedule live network activity.
+    setTimeout(callback, delay) { const id = nextTimer++; timers.set(id, { callback, delay }); return id; },
+    clearTimeout(id) { timers.delete(id); }, setInterval() {},
     fetch: async (url, options) => {
       const u = new URL(url);
       assert.equal(u.origin + u.pathname, 'https://gs-loc.apple.com/ils-settings/save');
@@ -78,6 +84,12 @@ export function createPicker(html, device, storage = new Map()) {
   }
   return {
     box, element, storage, views, requests,
+    expireRequests() {
+      for (const [id, timer] of [...timers]) {
+        if (timer.delay === 8000) { timers.delete(id); timer.callback(); }
+      }
+    },
+    pendingDeadlines: () => [...timers.values()].filter(timer => timer.delay === 8000).length,
     read: expression => vm.runInContext(expression, box),
     intercept: handler => { intercept = handler; },
     ready: () => new Promise(resolve => setImmediate(resolve))
